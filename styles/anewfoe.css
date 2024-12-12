@@ -1,0 +1,67 @@
+.reveal-monster {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #000;
+  border-radius: 5px;
+  color: #fff;
+  cursor: pointer;
+  margin: 0 4px;
+  padding: 4px;
+}
+
+.reveal-monster:hover {
+  background: rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 5px red;
+}
+
+.monster-info-window {
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid #786e6e;
+  border-radius: 5px;
+}
+
+.monster-info {
+  padding: 10px;
+}
+
+.monster-header {
+  margin-bottom: 15px;
+  align-items: center;
+  gap: 10px;
+}
+
+.monster-header h2 {
+  margin: 0;
+  color: #fff;
+}
+
+.monster-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stat-row {
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px;
+  border-bottom: 1px solid #444;
+  color: #fff;
+}
+
+.stat-roll {
+  background: #4a4a4a;
+  border: 1px solid #666;
+  border-radius: 3px;
+  color: #fff;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.stat-roll:hover {
+  background: #666;
+}
+
+.stat-roll i {
+  margin-right: 5px;
+}

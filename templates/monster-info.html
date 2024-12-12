@@ -1,0 +1,20 @@
+<div class="monster-info">
+  <div class="monster-header flexrow">
+    <img src="{{img}}" width="64" height="64" style="border: none" />
+    <h2>{{name}}</h2>
+  </div>
+  <div class="monster-stats">
+    {{#each stats}}
+    <div class="stat-row flexrow">
+      <strong>{{label}}:</strong>
+      {{#if revealed}}
+      <span class="revealed-stat">{{value}}</span>
+      {{else}}
+      <button class="stat-roll" data-key="{{key}}" data-dc="{{dc}}">
+        <i class="fas fa-dice-d20"></i> DC {{dc}}
+      </button>
+      {{/if}}
+    </div>
+    {{/each}}
+  </div>
+</div>
