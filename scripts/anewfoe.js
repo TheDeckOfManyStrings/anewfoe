@@ -247,12 +247,9 @@ class ANewFoe {
     const socketName = `module.${this.ID}`;
     console.log(`${this.ID} | Setting up socket on ${socketName}`);
 
-    game.socket.on(socketName, (data, ack) => {
-      console.log(
-        `${this.ID} | Socket message received by ${game.user.name}:`,
-        data
-      );
-      this.handleSocketMessage(data);
+    game.socket.on(socketName, async (data, ack) => {
+      console.log(`${this.ID} | Socket message received:`, data);
+      await this.handleSocketMessage(data);
       if (ack && typeof ack === "function") ack({ received: true });
     });
   }
@@ -262,22 +259,38 @@ class ANewFoe {
       switch (data.type) {
         case "revealStat":
           if (game.user.isGM) {
-            console.log(`${this.ID} | GM handling stat reveal request:`, data);
             await this.handleStatReveal(data);
           }
           break;
         case "statRevealed":
           if (data.userId === game.user.id) {
-            console.log(
-              `${this.ID} | Player handling stat reveal response:`,
-              data
-            );
             await this.handleStatRevealed(data);
+          }
+          break;
+        case "setTokenFlags":
+          if (game.user.isGM) {
+            await this.handleSetTokenFlags(data);
           }
           break;
       }
     } catch (error) {
       console.error(`${this.ID} | Error handling socket message:`, error);
+    }
+  }
+
+  static async handleSetTokenFlags(data) {
+    if (!game.user.isGM) return;
+
+    try {
+      const token = canvas.tokens.get(data.tokenId);
+      if (!token) return;
+
+      await token.document.setFlag(this.ID, this.FLAGS.REVEALED, true);
+      await token.document.setFlag(this.ID, this.FLAGS.REVEALED_TO, [
+        data.userId,
+      ]);
+    } catch (error) {
+      console.error(`${this.ID} | Error setting token flags:`, error);
     }
   }
 
@@ -487,6 +500,16 @@ class ANewFoe {
   static isMonsterRevealed(tokenOrDocument) {
     try {
       const document = tokenOrDocument.document ?? tokenOrDocument;
+      const actorId = document.getFlag(this.ID, "actorId");
+
+      // First check if monster type is known
+      const learnedMonsters =
+        game.settings.get(this.ID, "learnedMonsters") || {};
+      if (learnedMonsters[game.user.id]?.includes(actorId)) {
+        return true;
+      }
+
+      // Then check individual token reveal status
       const revealed = document.getFlag(this.ID, this.FLAGS.REVEALED);
       if (!revealed) return false;
 
@@ -522,10 +545,28 @@ class ANewFoe {
     });
 
     // Process new tokens
-    Hooks.on("createToken", (document, options, userId) => {
+    Hooks.on("createToken", async (document, options, userId) => {
       if (!game.user.isGM) {
         console.log(`${this.ID} | Processing new token`, document.name);
         const token = document.object;
+        const actorId = document.getFlag(this.ID, "actorId");
+
+        // Check if this monster type is already learned
+        const learnedMonsters =
+          game.settings.get(this.ID, "learnedMonsters") || {};
+        const isLearned = learnedMonsters[game.user.id]?.includes(actorId);
+
+        if (isLearned) {
+          console.log(
+            `${this.ID} | Monster type is learned, requesting flag update`
+          );
+          // Request GM to set flags instead of setting them directly
+          game.socket.emit(`module.${this.ID}`, {
+            type: "setTokenFlags",
+            tokenId: token.id,
+            userId: game.user.id,
+          });
+        }
 
         if (
           this.isMonsterTypeKnown(document) ||
