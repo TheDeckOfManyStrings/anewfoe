@@ -842,23 +842,78 @@ class ANewFoe {
     }
   }
 
-  static _createBlackOverlay(token) {
+  static _createSimpleSilhouette(token) {
+    // Remove any existing overlay
+    this._removeBlackOverlay(token);
+
+    // Create simple black background
+    const background = new PIXI.Graphics();
+    background.beginFill(0x000000, 1);
+    background.drawRect(0, 0, token.w, token.h);
+    background.endFill();
+    background.zIndex = 999;
+
+    token.addChild(background);
+    token.blackOverlay = background;
+  }
+
+  static _createAnimatedOverlay(token) {
     // Remove any existing overlay first
     this._removeBlackOverlay(token);
 
-    // Create new overlay
-    const overlay = new PIXI.Graphics();
-    overlay.beginFill(0x000000, 1);
-    overlay.drawRect(0, 0, token.w, token.h);
-    overlay.endFill();
-    overlay.zIndex = 999; // Ensure it's on top
+    // Create container for overlay elements
+    const container = new PIXI.Container();
+    container.zIndex = 999;
 
-    token.addChild(overlay);
-    token.blackOverlay = overlay;
+    // Create black background
+    const background = new PIXI.Graphics();
+    background.beginFill(0x000000, 1);
+    background.drawRect(0, 0, token.w, token.h);
+    background.endFill();
+    container.addChild(background);
+
+    // Create question mark text with enhanced visibility
+    const questionMark = new PIXI.Text("?", {
+      fontFamily: "Arial",
+      fontSize: Math.min(token.w, token.h) * 0.8,
+      fill: 0xffffff,
+      align: "center",
+      fontWeight: "bold",
+      dropShadow: true,
+      dropShadowColor: 0x000000,
+      dropShadowDistance: 2,
+      dropShadowAngle: Math.PI / 4,
+      dropShadowBlur: 4,
+    });
+
+    questionMark.anchor.set(0.5);
+    questionMark.position.set(token.w / 2, token.h / 2);
+    container.addChild(questionMark);
+
+    // Enhanced animation
+    let animationFrame;
+    const animate = () => {
+      const time = Date.now() / 500;
+      const scaleChange = Math.sin(time) * 0.25;
+      questionMark.scale.set(1 + scaleChange);
+      questionMark.rotation = Math.sin(time) * 0.2;
+      questionMark.style.dropShadowDistance = 2 + Math.sin(time) * 2;
+      questionMark.style.dropShadowBlur = 4 + Math.sin(time * 2) * 2;
+      animationFrame = requestAnimationFrame(animate);
+    };
+    animate();
+
+    container.animationFrame = animationFrame;
+    token.addChild(container);
+    token.blackOverlay = container;
   }
 
   static _removeBlackOverlay(token) {
     if (token.blackOverlay) {
+      // Cancel animation frame if it exists
+      if (token.blackOverlay.animationFrame) {
+        cancelAnimationFrame(token.blackOverlay.animationFrame);
+      }
       token.blackOverlay.destroy();
       token.blackOverlay = null;
     }
@@ -870,8 +925,29 @@ class ANewFoe {
 
     try {
       if (!token.document.hidden) {
-        // Immediately create black overlay
-        this._createBlackOverlay(token);
+        // Check if this is a reveal from hidden state
+        const isReveal = token.document._source?.hidden === true;
+
+        if (isReveal) {
+          // Use animated overlay only for reveals
+          this._createAnimatedOverlay(token);
+
+          // Remove overlay and apply silhouette after animation
+          setTimeout(() => {
+            this._removeBlackOverlay(token);
+            // Apply silhouette effect to token
+            if (token.mesh) {
+              token.mesh.tint = 0x000000;
+              token.mesh.alpha = 1;
+            }
+          }, 1000);
+        } else {
+          // For regular movement, just ensure silhouette is applied
+          if (token.mesh) {
+            token.mesh.tint = 0x000000;
+            token.mesh.alpha = 1;
+          }
+        }
 
         // Block visibility animation
         if (token._animation) token._animation.kill();
@@ -886,11 +962,6 @@ class ANewFoe {
         if (originalImage) {
           const texture = await loadTexture(originalImage);
           token.mesh.texture = texture;
-          token.mesh.tint = 0x000000;
-          token.mesh.alpha = 1;
-
-          // Remove the black overlay after the silhouette is ready
-          this._removeBlackOverlay(token);
         }
 
         // Update text display locally
@@ -909,7 +980,6 @@ class ANewFoe {
       }
     } catch (error) {
       console.error(`${this.ID} | Error processing token visibility:`, error);
-      // Clean up overlay in case of error
       this._removeBlackOverlay(token);
     } finally {
       this.OPERATIONS.PROCESSING_VISIBILITY = false;
