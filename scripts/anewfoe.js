@@ -1195,8 +1195,10 @@ class ANewFoe {
         },
       },
       default: "reveal",
-      width: 300,
-      classes: ["reveal-monster-dialog"], // Add this line
+      classes: ["reveal-monster-dialog", "app"],  // Add 'app' class here
+    }, {
+      id: 'reveal-monster-dialog',  // Add unique ID
+      classes: ['reveal-monster-window']  // Add additional class for the window
     }).render(true);
   }
 

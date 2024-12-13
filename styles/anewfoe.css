@@ -142,41 +142,53 @@
 
 /* Add these new styles for the reveal dialog */
 .dialog.reveal-monster-dialog {
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.8);
   border: none;
   border-radius: 10px;
-  opacity: 0.85;
+  color: #fff;
 }
 
 .reveal-monster-dialog .window-header {
-  background: rgba(0, 0, 0, 0.9);
-  border-bottom: none;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 10px 10px 0 0;
+  color: #fff;
 }
 
 .reveal-monster-dialog .window-content {
-  background: rgba(0, 0, 0, 0.9);
+  background: transparent;
   border: none;
-  padding: 0;
+  padding: 10px;
   border-radius: 0 0 10px 10px;
   color: #fff;
+}
+
+.reveal-monster-dialog .dialog-content {
+  background: transparent;
+}
+
+.reveal-monster-dialog .monster-info {
+  background: transparent !important;
 }
 
 .reveal-monster-dialog .dialog-buttons {
   border: none;
   background: transparent;
+  padding: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .reveal-monster-dialog .dialog-button {
-  background: #4a4a4a;
-  border: 1px solid #666;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 3px;
   color: #fff;
-  transition: background 0.3s;
+  transition: all 0.3s;
 }
 
 .reveal-monster-dialog .dialog-button:hover {
-  background: #666;
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
 .reveal-monster-dialog .player-row {
@@ -184,6 +196,69 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-.reveal-monster-dialog .player-row:hover {
+.reveal-monster-dialog .window-title,
+.reveal-monster-dialog .header-button {
+  color: #fff;
+}
+
+/* Update reveal dialog styles */
+.reveal-monster-window {
+  background: rgba(0, 0, 0, 0.9);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+}
+
+.reveal-monster-window .window-header {
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px 10px 0 0;
+  color: #fff;
+}
+
+.reveal-monster-window .window-content {
+  background: transparent;
+  border: none;
+  padding: 10px;
+  border-radius: 0 0 10px 10px;
+  color: #fff;
+}
+
+/* Rename existing dialog styles to match new class */
+.reveal-monster-window .dialog-content {
+  background: transparent;
+}
+
+.reveal-monster-window .monster-info {
+  background: transparent !important;
+}
+
+.reveal-monster-window .dialog-buttons {
+  border: none;
+  background: transparent;
+  padding: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.reveal-monster-window .dialog-button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  color: #fff;
+  transition: all 0.3s;
+}
+
+.reveal-monster-window .dialog-button:hover {
   background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.reveal-monster-window .player-row {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.reveal-monster-window .window-title,
+.reveal-monster-window .header-button {
+  color: #fff;
 }
