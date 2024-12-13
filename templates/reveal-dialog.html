@@ -1,13 +1,21 @@
 <form>
-  <div class="form-group">
-    <label>Select players to reveal monster to:</label>
-    {{#each players}}
-    <div class="form-group">
-      <label>
-        <input type="checkbox" name="players" value="{{this.id}}" {{#if
-        this.revealed}}checked{{/if}}> {{this.name}}
-      </label>
+  <div class="monster-info">
+    <div class="monster-header flexrow">
+      <img src="{{img}}" />
+      <h2>{{name}}</h2>
     </div>
-    {{/each}}
+    <div class="player-list">
+      {{#each players}}
+      <div class="player-row flexrow">
+        <label>
+          <input type="checkbox" name="players" value="{{this.id}}" {{#if
+          this.known}}checked{{/if}}> {{this.name}}
+        </label>
+        {{#if this.known}}
+        <span class="player-known"><i class="fas fa-check"></i></span>
+        {{/if}}
+      </div>
+      {{/each}}
+    </div>
   </div>
 </form>

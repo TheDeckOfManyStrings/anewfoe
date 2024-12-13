@@ -12,13 +12,13 @@ class MonsterInfoDisplay extends Application {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: "monster-info-display",
       template: `modules/${ANewFoe.ID}/templates/monster-info.html`,
-      title: "",
+      title: "Monster Info",
       width: 240,
       height: 420,
       maxWidth: 240,
       maxHeight: 420,
       minimizable: true,
-      resizable: true,
+      resizable: false,
       classes: ["monster-info-window"],
       popOut: true,
       opacity: 0.5,
@@ -195,10 +195,13 @@ class MonsterInfoDisplay extends Application {
     if (!sidebar) return super.setPosition(options);
 
     const sidebarWidth = sidebar.offsetWidth;
-    const position = {
-      left: window.innerWidth - sidebarWidth - this.options.width - 20,
-      top: window.innerHeight - this.options.height - 20,
+    let savedPostion = game.settings.get(ANewFoe.ID, "infoDisplayPosition");
+    const position = savedPostion || {
+      left: window.innerWidth - sidebarWidth - this.options.width - 5,
+      top: window.innerHeight - this.options.height - 5,
     };
+
+    // game.settings.set(ANewFoe.ID, "infoDisplayPosition", position);
 
     return super.setPosition(foundry.utils.mergeObject(options, position));
   }
@@ -207,6 +210,11 @@ class MonsterInfoDisplay extends Application {
     if (MonsterInfoDisplay.instance === this) {
       MonsterInfoDisplay.instance = null;
     }
+
+    //set the position to the current position of the window
+    const position = this.position;
+    game.settings.set(ANewFoe.ID, "infoDisplayPosition", position);
+
     return super.close(options);
   }
 
@@ -1147,13 +1155,22 @@ class ANewFoe {
   static async showRevealDialog(token) {
     console.log(`${this.ID} | Showing reveal dialog for`, token.name);
 
+    const actorId = token.document.getFlag(this.ID, "actorId");
+    const learnedMonsters = game.settings.get(this.ID, "learnedMonsters") || {};
+    const revealedTo =
+      token.document.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
+
     const content = await renderTemplate(this.TEMPLATES.REVEAL_DIALOG, {
+      img: token.document.texture.src,
+      name: token.name,
       players: game.users
         .filter((u) => !u.isGM)
         .map((u) => ({
           id: u.id,
           name: u.name,
-          revealed: this.isMonsterRevealed(token.document),
+          known:
+            learnedMonsters[u.id]?.includes(actorId) ||
+            revealedTo.includes(u.id),
         })),
     });
 
@@ -1177,6 +1194,9 @@ class ANewFoe {
           label: "Cancel",
         },
       },
+      default: "reveal",
+      width: 300,
+      classes: ["reveal-monster-dialog"], // Add this line
     }).render(true);
   }
 
