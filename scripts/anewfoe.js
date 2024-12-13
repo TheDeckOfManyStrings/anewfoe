@@ -921,6 +921,9 @@ class ANewFoe {
 
     try {
       if (!token.document.hidden) {
+        // Temporarily hide the token during the transition
+        token.alpha = 0;
+
         // Check if this is a reveal from hidden state
         const isReveal = token.document._source?.hidden === true;
 
@@ -936,6 +939,8 @@ class ANewFoe {
               token.mesh.tint = 0x000000;
               token.mesh.alpha = 1;
             }
+            // Restore token visibility
+            token.alpha = 1;
           }, 1000);
         } else {
           // For regular movement, just ensure silhouette is applied
@@ -943,15 +948,13 @@ class ANewFoe {
             token.mesh.tint = 0x000000;
             token.mesh.alpha = 1;
           }
+          // Restore token visibility
+          token.alpha = 1;
         }
 
         // Block visibility animation
         if (token._animation) token._animation.kill();
         if (token._alphaTransition) token._alphaTransition.kill();
-
-        // Force immediate visibility
-        token.visible = true;
-        token.alpha = 1;
 
         // Apply visual changes locally
         const originalImage = token.document.getFlag(this.ID, "originalImage");
@@ -977,6 +980,8 @@ class ANewFoe {
     } catch (error) {
       console.error(`${this.ID} | Error processing token visibility:`, error);
       this._removeBlackOverlay(token);
+      // Restore token visibility in case of error
+      token.alpha = 1;
     } finally {
       this.OPERATIONS.PROCESSING_VISIBILITY = false;
     }
