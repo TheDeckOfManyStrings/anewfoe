@@ -580,22 +580,26 @@ class ANewFoe {
       if (!game.user.isGM) {
         console.log(`${this.ID} | Refreshing token, processing visibility`);
 
-        for (const token of canvas.tokens.placeables) {
-          if (
-            !token.document?.flags ||
-            !token.document.getFlag(this.ID, "actorId")
-          ) {
-            continue;
-          }
+        if (
+          !token.document?.flags ||
+          !token.document.getFlag(this.ID, "actorId")
+        ) {
+          return;
+        }
 
-          if (
-            this.isMonsterTypeKnown(token.document) ||
-            this.isMonsterRevealed(token.document)
-          ) {
-            this._makeTokenClickable(token);
-          } else if (!token.document.hidden) {
-            await this._processTokenVisibility(token);
+        if (
+          this.isMonsterTypeKnown(token.document) ||
+          this.isMonsterRevealed(token.document)
+        ) {
+          this._makeTokenClickable(token);
+        } else if (!token.document.hidden) {
+          // Apply silhouette effect immediately
+          if (token.mesh) {
+            token.mesh.tint = 0x000000;
+            token.mesh.alpha = 1;
           }
+          // Restore token visibility
+          token.alpha = 1;
         }
       }
     });
@@ -802,6 +806,12 @@ class ANewFoe {
             // Block standard visibility animation
             if (token._animation) token._animation.kill();
             if (token._alphaTransition) token._alphaTransition.kill();
+
+            // Apply silhouette effect immediately
+            if (token.mesh) {
+              token.mesh.tint = 0x000000;
+              token.mesh.alpha = 1;
+            }
 
             // Force immediate full visibility
             token.alpha = 1;
