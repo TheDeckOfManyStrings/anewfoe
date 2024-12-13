@@ -22,5 +22,6 @@
       "name": "English",
       "path": "languages/en.json"
     }
-  ]
+  ],
+  "socket": true
 }

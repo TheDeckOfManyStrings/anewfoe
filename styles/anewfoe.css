@@ -14,9 +14,11 @@
 }
 
 .monster-info-window {
-  background: rgba(0, 0, 0, 0.8);
-  border: 1px solid #786e6e;
-  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.9);
+  border: none;
+  border-radius: 10px;
+  padding: 0;
+  opacity: 0.85;
 }
 
 .monster-info {
@@ -24,9 +26,16 @@
 }
 
 .monster-header {
-  margin-bottom: 15px;
+  margin-bottom: 10px;
   align-items: center;
   gap: 10px;
+}
+
+.monster-header img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain; /* Ensure the image scales down to fit within the square */
+  border: none;
 }
 
 .monster-header h2 {
@@ -37,7 +46,7 @@
 .monster-stats {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
 }
 
 .stat-row {
@@ -55,7 +64,10 @@
   color: #fff;
   padding: 2px 8px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.5s;
+  opacity: 0.5;
+  width: 100px; /* Set a fixed width */
+  text-align: center;
 }
 
 .stat-roll:hover {
@@ -64,4 +76,19 @@
 
 .stat-roll i {
   margin-right: 5px;
+}
+
+.monster-info-window .window-header {
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.9);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+}
+
+.monster-info-window .window-content {
+  background: rgba(0, 0, 0, 0.9);
+  border: none;
+  padding: 0;
+  border-radius: 0 0 10px 10px;
 }

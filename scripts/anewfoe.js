@@ -12,13 +12,16 @@ class MonsterInfoDisplay extends Application {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: "monster-info-display",
       template: `modules/${ANewFoe.ID}/templates/monster-info.html`,
-      title: "Monster Information",
-      width: 300,
-      height: 400,
+      title: "",
+      width: 240,
+      height: 420,
+      maxWidth: 240,
+      maxHeight: 420,
       minimizable: true,
       resizable: true,
       classes: ["monster-info-window"],
       popOut: true,
+      opacity: 0.5,
     });
   }
 
@@ -34,6 +37,17 @@ class MonsterInfoDisplay extends Application {
       `${ANewFoe.ID} | Getting data for display, revealed stats:`,
       playerStats
     );
+
+    const speed = [];
+    if (this.actor.system.attributes.movement.walk) {
+      speed.push(`${this.actor.system.attributes.movement.walk} ft.`);
+    }
+    if (this.actor.system.attributes.movement.fly) {
+      speed.push(`Fly ${this.actor.system.attributes.movement.fly} ft.`);
+    }
+    if (this.actor.system.attributes.movement.swim) {
+      speed.push(`Swim ${this.actor.system.attributes.movement.swim} ft.`);
+    }
 
     return {
       name: this.actor.name,
@@ -55,7 +69,7 @@ class MonsterInfoDisplay extends Application {
         },
         {
           label: "Speed",
-          value: `${this.actor.system.attributes.movement.walk} ft.`,
+          value: speed.join(", "),
           key: "speed",
           revealed: playerStats.includes("speed"),
           dc: 10,
@@ -155,7 +169,6 @@ class MonsterInfoDisplay extends Application {
             `${ANewFoe.ID} | Roll succeeded (${roll.total}), sending:`,
             socketData
           );
-          // Replace registerAndExecute with emit
           game.socket.emit(`module.${ANewFoe.ID}`, socketData);
         } else {
           console.log(`${ANewFoe.ID} | Roll failed (${roll.total})`);
@@ -230,12 +243,13 @@ class ANewFoe {
     const socketName = `module.${this.ID}`;
     console.log(`${this.ID} | Setting up socket on ${socketName}`);
 
-    game.socket.on(socketName, (data) => {
+    game.socket.on(socketName, (data, ack) => {
       console.log(
         `${this.ID} | Socket message received by ${game.user.name}:`,
         data
       );
       this.handleSocketMessage(data);
+      if (ack && typeof ack === "function") ack({ received: true });
     });
   }
 
@@ -612,7 +626,7 @@ class ANewFoe {
 
       // Register socket listener using V12 syntax
       game.socket.register(`module.${this.ID}`, {
-        listen: async (data) => {
+        listen: async (data, ack) => {
           console.log(`${this.ID} | Socket message received:`, data);
 
           if (data.type === "revealStat" && game.user.isGM) {
@@ -638,8 +652,8 @@ class ANewFoe {
                   revealedStats
                 );
 
-                // Send confirmation back to player using V12 syntax
-                game.socket.registerAndExecute(`module.${this.ID}`, {
+                // Send confirmation back to player
+                game.socket.emit(`module.${this.ID}`, {
                   type: "statRevealed",
                   userId: data.userId,
                   key: data.key,
@@ -675,6 +689,8 @@ class ANewFoe {
               );
             }
           }
+
+          if (ack && typeof ack === "function") ack({ received: true });
         },
       });
     });
@@ -905,6 +921,7 @@ class ANewFoe {
           "texture.src": originalImage,
           "texture.tint": originalTint || 0xffffff,
           name: originalName,
+          displayName: CONST.TOKEN_DISPLAY_MODES.OWNER_HOVER,
           flags: {
             ...tokenData.flags,
             [this.ID]: {
