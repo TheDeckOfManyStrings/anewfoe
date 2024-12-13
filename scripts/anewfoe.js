@@ -577,18 +577,25 @@ class ANewFoe {
 
     // Handle refreshToken
     Hooks.on("refreshToken", async (token) => {
-      if (
-        !game.user.isGM &&
-        token?.document &&
-        !this.OPERATIONS.PROCESSING_VISIBILITY
-      ) {
-        if (
-          this.isMonsterTypeKnown(token.document) ||
-          this.isMonsterRevealed(token.document)
-        ) {
-          this._makeTokenClickable(token);
-        } else if (!token.document.hidden) {
-          await this._processTokenVisibility(token);
+      if (!game.user.isGM) {
+        console.log(`${this.ID} | Refreshing token, processing visibility`);
+
+        for (const token of canvas.tokens.placeables) {
+          if (
+            !token.document?.flags ||
+            !token.document.getFlag(this.ID, "actorId")
+          ) {
+            continue;
+          }
+
+          if (
+            this.isMonsterTypeKnown(token.document) ||
+            this.isMonsterRevealed(token.document)
+          ) {
+            this._makeTokenClickable(token);
+          } else if (!token.document.hidden) {
+            await this._processTokenVisibility(token);
+          }
         }
       }
     });
@@ -679,74 +686,63 @@ class ANewFoe {
         `${this.ID} | Registering socket listener as ${game.user.name}`
       );
 
-      // Register socket listener using V12 syntax
-      game.socket.register(`module.${this.ID}`, {
-        listen: async (data, ack) => {
-          console.log(`${this.ID} | Socket message received:`, data);
+      // Register socket listener using the correct method
+      game.socket.on(`module.${this.ID}`, async (data, ack) => {
+        console.log(`${this.ID} | Socket message received:`, data);
 
-          if (data.type === "revealStat" && game.user.isGM) {
-            console.log(`${this.ID} | GM handling stat reveal:`, data);
-            try {
-              const revealedStats =
-                game.settings.get(this.ID, "revealedStats") || {};
-              const statKey = `${data.userId}.${data.actorId}`;
+        if (data.type === "revealStat" && game.user.isGM) {
+          console.log(`${this.ID} | GM handling stat reveal:`, data);
+          try {
+            const revealedStats =
+              game.settings.get(this.ID, "revealedStats") || {};
+            const statKey = `${data.userId}.${data.actorId}`;
 
-              if (!revealedStats[statKey]) {
-                revealedStats[statKey] = [];
-              }
-
-              if (!revealedStats[statKey].includes(data.key)) {
-                revealedStats[statKey].push(data.key);
-                await game.settings.set(
-                  this.ID,
-                  "revealedStats",
-                  revealedStats
-                );
-                console.log(
-                  `${this.ID} | Updated revealed stats:`,
-                  revealedStats
-                );
-
-                // Send confirmation back to player
-                game.socket.emit(`module.${this.ID}`, {
-                  type: "statRevealed",
-                  userId: data.userId,
-                  key: data.key,
-                  actorId: data.actorId,
-                });
-              }
-            } catch (error) {
-              console.error(`${this.ID} | Error in GM stat reveal:`, error);
+            if (!revealedStats[statKey]) {
+              revealedStats[statKey] = [];
             }
-          }
 
-          if (data.type === "statRevealed" && data.userId === game.user.id) {
-            console.log(
-              `${this.ID} | Player received stat reveal confirmation:`,
-              data
-            );
-            try {
-              await ChatMessage.create({
-                content: `Success! You've discovered the creature's ${data.key.toUpperCase()}!`,
-                speaker: ChatMessage.getSpeaker(),
-              });
-
-              if (MonsterInfoDisplay.instance) {
-                console.log(
-                  `${this.ID} | Refreshing display after stat reveal`
-                );
-                await MonsterInfoDisplay.instance.refresh();
-              }
-            } catch (error) {
-              console.error(
-                `${this.ID} | Error handling stat revealed:`,
-                error
+            if (!revealedStats[statKey].includes(data.key)) {
+              revealedStats[statKey].push(data.key);
+              await game.settings.set(this.ID, "revealedStats", revealedStats);
+              console.log(
+                `${this.ID} | Updated revealed stats:`,
+                revealedStats
               );
-            }
-          }
 
-          if (ack && typeof ack === "function") ack({ received: true });
-        },
+              // Send confirmation back to player
+              game.socket.emit(`module.${this.ID}`, {
+                type: "statRevealed",
+                userId: data.userId,
+                key: data.key,
+                actorId: data.actorId,
+              });
+            }
+          } catch (error) {
+            console.error(`${this.ID} | Error in GM stat reveal:`, error);
+          }
+        }
+
+        if (data.type === "statRevealed" && data.userId === game.user.id) {
+          console.log(
+            `${this.ID} | Player received stat reveal confirmation:`,
+            data
+          );
+          try {
+            await ChatMessage.create({
+              content: `Success! You've discovered the creature's ${data.key.toUpperCase()}!`,
+              speaker: ChatMessage.getSpeaker(),
+            });
+
+            if (MonsterInfoDisplay.instance) {
+              console.log(`${this.ID} | Refreshing display after stat reveal`);
+              await MonsterInfoDisplay.instance.refresh();
+            }
+          } catch (error) {
+            console.error(`${this.ID} | Error handling stat revealed:`, error);
+          }
+        }
+
+        if (ack && typeof ack === "function") ack({ received: true });
       });
     });
 
@@ -959,7 +955,7 @@ class ANewFoe {
 
         // Apply visual changes locally
         const originalImage = token.document.getFlag(this.ID, "originalImage");
-        if (originalImage) {
+        if (originalImage && token.mesh) {
           const texture = await loadTexture(originalImage);
           token.mesh.texture = texture;
         }
