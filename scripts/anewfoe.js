@@ -749,6 +749,75 @@ class ANewFoe {
         },
       });
     });
+
+    // Add new hook to catch transitions
+    Hooks.on("preUpdateToken", (document, changes, options, userId) => {
+      if (!game.user.isGM && changes.hidden === false) {
+        const token = document.object;
+        if (
+          token &&
+          !this.isMonsterTypeKnown(document) &&
+          !this.isMonsterRevealed(document)
+        ) {
+          // Cancel any existing transition
+          if (token._alphaTransition) {
+            token._alphaTransition.cancel();
+            token._alphaTransition = null;
+          }
+        }
+      }
+    });
+
+    // Add or modify preUpdateToken hook
+    Hooks.on("preUpdateToken", (document, changes, options, userId) => {
+      if (!game.user.isGM && changes.hidden === false) {
+        const token = document.object;
+        if (
+          token &&
+          !this.isMonsterTypeKnown(document) &&
+          !this.isMonsterRevealed(document)
+        ) {
+          // Override the animation temporarily
+          const originalTransition = token._animateVisibility;
+          token._animateVisibility = () => {
+            token.alpha = 1;
+            return Promise.resolve(true);
+          };
+
+          // Restore after a short delay
+          setTimeout(() => {
+            token._animateVisibility = originalTransition;
+          }, 100);
+        }
+      }
+    });
+
+    // Add this new hook at the very beginning of visibility changes
+    Hooks.on(
+      "preUpdateToken",
+      (document, changes, options, userId) => {
+        if (!game.user.isGM && changes.hidden === false) {
+          const token = document.object;
+          if (
+            token &&
+            !this.isMonsterTypeKnown(document) &&
+            !this.isMonsterRevealed(document)
+          ) {
+            // Block standard visibility animation
+            if (token._animation) token._animation.kill();
+            if (token._alphaTransition) token._alphaTransition.kill();
+
+            // Force immediate full visibility
+            token.alpha = 1;
+            if (token.mesh) token.mesh.alpha = 1;
+
+            // Prevent default animation
+            options.animation = false;
+          }
+        }
+      },
+      { priority: 100 }
+    ); // High priority to run before other hooks
   }
 
   static _makeTokenClickable(token) {
@@ -773,44 +842,63 @@ class ANewFoe {
     }
   }
 
+  static _createBlackOverlay(token) {
+    // Remove any existing overlay first
+    this._removeBlackOverlay(token);
+
+    // Create new overlay
+    const overlay = new PIXI.Graphics();
+    overlay.beginFill(0x000000, 1);
+    overlay.drawRect(0, 0, token.w, token.h);
+    overlay.endFill();
+    overlay.zIndex = 999; // Ensure it's on top
+
+    token.addChild(overlay);
+    token.blackOverlay = overlay;
+  }
+
+  static _removeBlackOverlay(token) {
+    if (token.blackOverlay) {
+      token.blackOverlay.destroy();
+      token.blackOverlay = null;
+    }
+  }
+
   static async _processTokenVisibility(token) {
-    // Prevent recursive calls
     if (this.OPERATIONS.PROCESSING_VISIBILITY) return;
     this.OPERATIONS.PROCESSING_VISIBILITY = true;
 
     try {
-      // Store original values if not already stored
-      if (token.document.getFlag(this.ID, "originalTint") === undefined) {
-        await token.document.setFlag(
-          this.ID,
-          "originalTint",
-          token.document.texture.tint || 0xffffff
-        );
-      }
-
-      if (token.document.getFlag(this.ID, "originalName") === undefined) {
-        await token.document.setFlag(
-          this.ID,
-          "originalName",
-          token.document.name
-        );
-      }
-
-      // Apply silhouette effect locally without updating the document
       if (!token.document.hidden) {
-        // Apply visual changes directly to the mesh
+        // Immediately create black overlay
+        this._createBlackOverlay(token);
+
+        // Block visibility animation
+        if (token._animation) token._animation.kill();
+        if (token._alphaTransition) token._alphaTransition.kill();
+
+        // Force immediate visibility
+        token.visible = true;
+        token.alpha = 1;
+
+        // Apply visual changes locally
         const originalImage = token.document.getFlag(this.ID, "originalImage");
         if (originalImage) {
           const texture = await loadTexture(originalImage);
           token.mesh.texture = texture;
           token.mesh.tint = 0x000000;
+          token.mesh.alpha = 1;
+
+          // Remove the black overlay after the silhouette is ready
+          this._removeBlackOverlay(token);
         }
 
-        // Update nameplate
+        // Update text display locally
         if (token.text) {
           token.text.text = "Unknown Creature";
           token.text.visible = true;
           token.text.alpha = 1;
+          token.text.draw();
         }
 
         // Ensure the token is non-interactive for players
@@ -818,13 +906,11 @@ class ANewFoe {
           token.interactive = false;
           token.buttonMode = false;
         }
-
-        // Set visibility without triggering a full redraw
-        token.visible = true;
-        token.mesh.alpha = 1;
       }
     } catch (error) {
       console.error(`${this.ID} | Error processing token visibility:`, error);
+      // Clean up overlay in case of error
+      this._removeBlackOverlay(token);
     } finally {
       this.OPERATIONS.PROCESSING_VISIBILITY = false;
     }
