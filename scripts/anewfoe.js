@@ -231,6 +231,10 @@ class ANewFoe {
 
   static DEFAULT_ICON = "icons/svg/mystery-man.svg";
 
+  static OPERATIONS = {
+    PROCESSING_VISIBILITY: false,
+  };
+
   static initialize() {
     console.log(`${this.ID} | Starting module initialization`);
     this.registerSettings();
@@ -572,14 +576,50 @@ class ANewFoe {
     });
 
     // Handle refreshToken
-    Hooks.on("refreshToken", (token) => {
-      if (!game.user.isGM && token?.document) {
+    Hooks.on("refreshToken", async (token) => {
+      if (
+        !game.user.isGM &&
+        token?.document &&
+        !this.OPERATIONS.PROCESSING_VISIBILITY
+      ) {
         if (
           this.isMonsterTypeKnown(token.document) ||
           this.isMonsterRevealed(token.document)
         ) {
           this._makeTokenClickable(token);
+        } else if (!token.document.hidden) {
+          await this._processTokenVisibility(token);
         }
+      }
+    });
+
+    // Enhance the updateToken hook
+    Hooks.on("updateToken", async (document, changes, options, userId) => {
+      const token = document.object;
+      if (!game.user.isGM && token) {
+        // Check if this update includes a hidden state change
+        if (changes.hasOwnProperty("hidden")) {
+          console.log(`${this.ID} | Token visibility changed for`, token.name);
+
+          if (
+            !this.isMonsterTypeKnown(document) &&
+            !this.isMonsterRevealed(document)
+          ) {
+            // Only process if token is becoming visible
+            if (!changes.hidden) {
+              await this._processTokenVisibility(token);
+            }
+          }
+        }
+
+        if (
+          this.isMonsterTypeKnown(document) ||
+          this.isMonsterRevealed(document)
+        ) {
+          this._makeTokenClickable(token);
+        }
+      } else if (game.user.isGM) {
+        this.updateTokenOverlay(token);
       }
     });
 
@@ -594,6 +634,21 @@ class ANewFoe {
     Hooks.on("updateToken", (document, changes, options, userId) => {
       const token = document.object;
       if (!game.user.isGM && token) {
+        // Check if this update includes a hidden state change
+        if (changes.hasOwnProperty("hidden")) {
+          console.log(`${this.ID} | Token visibility changed for`, token.name);
+
+          if (
+            !this.isMonsterTypeKnown(document) &&
+            !this.isMonsterRevealed(document)
+          ) {
+            // If token becomes visible, ensure silhouette is applied
+            if (!changes.hidden) {
+              this._processTokenVisibility(token);
+            }
+          }
+        }
+
         if (
           this.isMonsterTypeKnown(document) ||
           this.isMonsterRevealed(document)
@@ -719,7 +774,12 @@ class ANewFoe {
   }
 
   static async _processTokenVisibility(token) {
+    // Prevent recursive calls
+    if (this.OPERATIONS.PROCESSING_VISIBILITY) return;
+    this.OPERATIONS.PROCESSING_VISIBILITY = true;
+
     try {
+      // Store original values if not already stored
       if (token.document.getFlag(this.ID, "originalTint") === undefined) {
         await token.document.setFlag(
           this.ID,
@@ -728,11 +788,45 @@ class ANewFoe {
         );
       }
 
-      token.document.texture.tint = 0x000000; // Black silhouette
-      token.document.name = "Unknown Creature";
-      await token.refresh();
+      if (token.document.getFlag(this.ID, "originalName") === undefined) {
+        await token.document.setFlag(
+          this.ID,
+          "originalName",
+          token.document.name
+        );
+      }
+
+      // Apply silhouette effect locally without updating the document
+      if (!token.document.hidden) {
+        // Apply visual changes directly to the mesh
+        const originalImage = token.document.getFlag(this.ID, "originalImage");
+        if (originalImage) {
+          const texture = await loadTexture(originalImage);
+          token.mesh.texture = texture;
+          token.mesh.tint = 0x000000;
+        }
+
+        // Update nameplate
+        if (token.text) {
+          token.text.text = "Unknown Creature";
+          token.text.visible = true;
+          token.text.alpha = 1;
+        }
+
+        // Ensure the token is non-interactive for players
+        if (!game.user.isGM) {
+          token.interactive = false;
+          token.buttonMode = false;
+        }
+
+        // Set visibility without triggering a full redraw
+        token.visible = true;
+        token.mesh.alpha = 1;
+      }
     } catch (error) {
       console.error(`${this.ID} | Error processing token visibility:`, error);
+    } finally {
+      this.OPERATIONS.PROCESSING_VISIBILITY = false;
     }
   }
 
