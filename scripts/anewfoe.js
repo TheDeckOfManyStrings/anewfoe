@@ -199,7 +199,8 @@ class MonsterInfoDisplay extends Application {
           usePlayerStats
         );
 
-        if (usePlayerStats && this.isAbilityCheck(key)) {
+        if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
+          // Changed to static call
           const modifier = await this.getPlayerModifier(key);
           if (modifier !== 0) {
             rollFormula = `1d20 + ${modifier}`;
@@ -219,7 +220,7 @@ class MonsterInfoDisplay extends Application {
         });
 
         let rollMessage = `Attempting to discern ${key.toUpperCase()}...`;
-        if (usePlayerStats && this.isAbilityCheck(key)) {
+        if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
           rollMessage += ` (${key.toUpperCase()} Check with ${roll.formula})`;
         }
 
@@ -256,7 +257,7 @@ class MonsterInfoDisplay extends Application {
     });
   }
 
-  isAbilityCheck(key) {
+  static isAbilityCheck(key) {
     const isAbility = ["str", "dex", "con", "int", "wis", "cha"].includes(key);
     console.log(`${ANewFoe.ID} | Is ability check for ${key}:`, isAbility);
     return isAbility;
@@ -322,6 +323,12 @@ class ANewFoe {
     PROCESSING_VISIBILITY: false,
   };
 
+  static DEBOUNCE = {
+    lastReveal: {},
+    lastChat: {},
+    TIMEOUT: 200,
+  };
+
   static initialize() {
     console.log(`${this.ID} | Starting module initialization`);
     this.registerSettings();
@@ -334,6 +341,9 @@ class ANewFoe {
     const socketName = `module.${this.ID}`;
     console.log(`${this.ID} | Setting up socket on ${socketName}`);
 
+    // Remove any existing listeners to prevent duplicates
+    game.socket.off(socketName);
+
     game.socket.on(socketName, async (data, ack) => {
       console.log(`${this.ID} | Socket message received:`, data);
       await this.handleSocketMessage(data);
@@ -343,6 +353,9 @@ class ANewFoe {
 
   static async handleSocketMessage(data) {
     try {
+      const messageKey = `${data.userId}-${data.key}-${data.actorId}`;
+      const now = Date.now();
+
       switch (data.type) {
         case "revealStat":
           if (game.user.isGM) {
@@ -350,7 +363,12 @@ class ANewFoe {
           }
           break;
         case "statRevealed":
-          if (data.userId === game.user.id) {
+          if (
+            data.userId === game.user.id &&
+            (!this.DEBOUNCE.lastReveal[messageKey] ||
+              now - this.DEBOUNCE.lastReveal[messageKey] >
+                this.DEBOUNCE.TIMEOUT)
+          ) {
             await this.handleStatRevealed(data);
           }
           break;
@@ -390,12 +408,34 @@ class ANewFoe {
 
   static async handleStatRevealed(data) {
     try {
+      const messageKey = `${data.userId}-${data.key}-${data.actorId}`;
+      const now = Date.now();
+
+      // Check if we've handled this message recently
+      if (
+        this.DEBOUNCE.lastReveal[messageKey] &&
+        now - this.DEBOUNCE.lastReveal[messageKey] < this.DEBOUNCE.TIMEOUT
+      ) {
+        console.log(
+          `${this.ID} | Skipping duplicate reveal handling for ${messageKey}`
+        );
+        return;
+      }
+
+      this.DEBOUNCE.lastReveal[messageKey] = now;
       console.log(`${this.ID} | Processing stat revealed for player`);
 
-      await ChatMessage.create({
-        content: `Success! You've discovered the creature's ${data.key.toUpperCase()}!`,
-        speaker: ChatMessage.getSpeaker(),
-      });
+      // Check if we've sent a chat message recently
+      if (
+        !this.DEBOUNCE.lastChat[messageKey] ||
+        now - this.DEBOUNCE.lastChat[messageKey] > this.DEBOUNCE.TIMEOUT
+      ) {
+        this.DEBOUNCE.lastChat[messageKey] = now;
+        await ChatMessage.create({
+          content: `Success! You've discovered the creature's ${data.key.toUpperCase()}!`,
+          speaker: ChatMessage.getSpeaker(),
+        });
+      }
 
       if (MonsterInfoDisplay.instance) {
         console.log(`${this.ID} | Refreshing display after stat reveal`);
@@ -499,148 +539,6 @@ class ANewFoe {
     });
   }
 
-  static registerSocketListeners() {
-    console.log(
-      `${this.ID} | Setting up socket listeners as ${game.user.name}`
-    );
-
-    // Remove any existing listeners to prevent duplicates
-    const socketName = `module.${this.ID}`;
-    game.socket.off(socketName);
-
-    game.socket.on(socketName, async (data) => {
-      console.log(`${this.ID} | Socket message received:`, data);
-
-      switch (data.type) {
-        case "revealStat":
-          if (game.user.isGM) {
-            console.log(`${this.ID} | GM processing stat reveal request`);
-            await this._handleGMStatReveal(data);
-          }
-          break;
-
-        case "statRevealed":
-          if (data.userId === game.user.id) {
-            console.log(`${this.ID} | Player processing stat reveal response`);
-            await this._handlePlayerStatReveal(data);
-          }
-          break;
-
-        case "refreshScene":
-          if (data.playerIds.includes(game.user.id)) {
-            console.log(`${this.ID} | Processing scene refresh`);
-            await canvas.scene.refresh();
-            await canvas.perception.initialize();
-            await canvas.tokens.draw();
-          }
-          break;
-      }
-    });
-  }
-
-  static async _handleGMStatReveal(data) {
-    try {
-      const revealedStats = game.settings.get(this.ID, "revealedStats") || {};
-      const statKey = `${data.userId}.${data.actorId}`;
-
-      if (!revealedStats[statKey]) {
-        revealedStats[statKey] = [];
-      }
-
-      if (!revealedStats[statKey].includes(data.key)) {
-        revealedStats[statKey].push(data.key);
-        await game.settings.set(this.ID, "revealedStats", revealedStats);
-
-        console.log(`${this.ID} | Updated revealed stats:`, revealedStats);
-
-        // Notify player of successful reveal
-        game.socket.emit(`module.${this.ID}`, {
-          type: "statRevealed",
-          userId: data.userId,
-          key: data.key,
-          actorId: data.actorId,
-        });
-      }
-    } catch (error) {
-      console.error(`${this.ID} | Error in GM stat reveal:`, error);
-    }
-  }
-
-  static async _handlePlayerStatReveal(data) {
-    try {
-      // Prevent duplicate messages by checking if this exact message was recently sent
-      const key = `${this.ID}-lastReveal-${data.userId}-${data.key}`;
-      const now = Date.now();
-      const lastReveal = window[key] || 0;
-
-      // If less than 100ms has passed since last reveal message, skip
-      if (now - lastReveal < 100) {
-        console.log(`${this.ID} | Skipping duplicate reveal message`);
-        return;
-      }
-
-      window[key] = now;
-
-      await ChatMessage.create({
-        content: `Success! You've discovered the creature's ${data.key.toUpperCase()}!`,
-        speaker: ChatMessage.getSpeaker(),
-      });
-
-      if (MonsterInfoDisplay.instance) {
-        console.log(`${this.ID} | Refreshing monster info display`);
-        await MonsterInfoDisplay.instance.refresh();
-      }
-    } catch (error) {
-      console.error(`${this.ID} | Error handling stat reveal:`, error);
-    }
-  }
-
-  // State check methods
-  static isMonsterTypeKnown(tokenOrDocument) {
-    try {
-      const document = tokenOrDocument.document ?? tokenOrDocument;
-      if (!document?.flags) return false;
-
-      const actorId = document.getFlag(this.ID, "actorId");
-      if (!actorId) return false;
-
-      const learnedMonsters =
-        game.settings.get(this.ID, "learnedMonsters") || {};
-      return learnedMonsters[game.user.id]?.includes(actorId) || false;
-    } catch (error) {
-      console.error(`${this.ID} | Error checking monster known status:`, error);
-      return false;
-    }
-  }
-
-  static isMonsterRevealed(tokenOrDocument) {
-    try {
-      const document = tokenOrDocument.document ?? tokenOrDocument;
-      const actorId = document.getFlag(this.ID, "actorId");
-
-      // First check if monster type is known
-      const learnedMonsters =
-        game.settings.get(this.ID, "learnedMonsters") || {};
-      if (learnedMonsters[game.user.id]?.includes(actorId)) {
-        return true;
-      }
-
-      // Then check individual token reveal status
-      const revealed = document.getFlag(this.ID, this.FLAGS.REVEALED);
-      if (!revealed) return false;
-
-      const revealedTo =
-        document.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
-      return revealedTo.includes(game.user.id);
-    } catch (error) {
-      console.error(
-        `${this.ID} | Error checking monster reveal status:`,
-        error
-      );
-      return false;
-    }
-  }
-
   static registerHooks() {
     // Store original data when GM creates token
     Hooks.on("preCreateToken", (document, data, options, userId) => {
@@ -685,16 +583,16 @@ class ANewFoe {
         }
 
         if (
-          this.isMonsterTypeKnown(document) ||
-          this.isMonsterRevealed(document)
+          ANewFoe.isMonsterTypeKnown(document) ||
+          ANewFoe.isMonsterRevealed(document)
         ) {
           console.log(
             `${this.ID} | Monster is known or revealed, making clickable`
           );
-          this._makeTokenClickable(token);
+          ANewFoe._makeTokenClickable(token);
         } else {
           console.log(`${this.ID} | New unknown monster, applying silhouette`);
-          this._processTokenVisibility(token);
+          ANewFoe._processTokenVisibility(token);
         }
       }
     });
@@ -712,21 +610,21 @@ class ANewFoe {
             continue;
           }
 
-          if (
-            this.isMonsterTypeKnown(token.document) ||
-            this.isMonsterRevealed(token.document)
-          ) {
-            await this._restoreTokenAppearance(token);
-            this._makeTokenClickable(token);
+          const isKnown = ANewFoe.isMonsterTypeKnown(token.document);
+          const isRevealed = ANewFoe.isMonsterRevealed(token.document);
+
+          if (isKnown || isRevealed) {
+            await ANewFoe._restoreTokenAppearance(token);
+            ANewFoe._makeTokenClickable(token);
           } else {
-            await this._processTokenVisibility(token);
+            await ANewFoe._processTokenVisibility(token);
           }
         }
       } else {
         // GM-side overlay updates
         canvas.tokens.placeables.forEach((token) => {
           if (token?.document?.flags) {
-            this.updateTokenOverlay(token);
+            ANewFoe.updateTokenOverlay(token);
           }
         });
       }
@@ -744,11 +642,11 @@ class ANewFoe {
           return;
         }
 
-        if (
-          this.isMonsterTypeKnown(token.document) ||
-          this.isMonsterRevealed(token.document)
-        ) {
-          this._makeTokenClickable(token);
+        const isKnown = ANewFoe.isMonsterTypeKnown(token.document);
+        const isRevealed = ANewFoe.isMonsterRevealed(token.document);
+
+        if (isKnown || isRevealed) {
+          ANewFoe._makeTokenClickable(token);
         } else if (!token.document.hidden) {
           // Apply silhouette effect immediately
           if (token.mesh) {
@@ -769,32 +667,32 @@ class ANewFoe {
         if (changes.hasOwnProperty("hidden")) {
           console.log(`${this.ID} | Token visibility changed for`, token.name);
 
-          if (
-            !this.isMonsterTypeKnown(document) &&
-            !this.isMonsterRevealed(document)
-          ) {
+          const isKnown = ANewFoe.isMonsterTypeKnown(document);
+          const isRevealed = ANewFoe.isMonsterRevealed(document);
+
+          if (!isKnown && !isRevealed) {
             // Only process if token is becoming visible
             if (!changes.hidden) {
-              await this._processTokenVisibility(token);
+              await ANewFoe._processTokenVisibility(token);
             }
           }
         }
 
         if (
-          this.isMonsterTypeKnown(document) ||
-          this.isMonsterRevealed(document)
+          ANewFoe.isMonsterTypeKnown(document) ||
+          ANewFoe.isMonsterRevealed(document)
         ) {
-          this._makeTokenClickable(token);
+          ANewFoe._makeTokenClickable(token);
         }
       } else if (game.user.isGM) {
-        this.updateTokenOverlay(token);
+        ANewFoe.updateTokenOverlay(token);
       }
     });
 
     // Draw overlays for GM
     Hooks.on("drawToken", (token) => {
       if (game.user.isGM) {
-        setTimeout(() => this.updateTokenOverlay(token), 100);
+        setTimeout(() => ANewFoe.updateTokenOverlay(token), 100);
       }
     });
 
@@ -806,25 +704,25 @@ class ANewFoe {
         if (changes.hasOwnProperty("hidden")) {
           console.log(`${this.ID} | Token visibility changed for`, token.name);
 
-          if (
-            !this.isMonsterTypeKnown(document) &&
-            !this.isMonsterRevealed(document)
-          ) {
+          const isKnown = ANewFoe.isMonsterTypeKnown(document);
+          const isRevealed = ANewFoe.isMonsterRevealed(document);
+
+          if (!isKnown && !isRevealed) {
             // If token becomes visible, ensure silhouette is applied
             if (!changes.hidden) {
-              this._processTokenVisibility(token);
+              ANewFoe._processTokenVisibility(token);
             }
           }
         }
 
         if (
-          this.isMonsterTypeKnown(document) ||
-          this.isMonsterRevealed(document)
+          ANewFoe.isMonsterTypeKnown(document) ||
+          ANewFoe.isMonsterRevealed(document)
         ) {
-          this._makeTokenClickable(token);
+          ANewFoe._makeTokenClickable(token);
         }
       } else if (game.user.isGM) {
-        this.updateTokenOverlay(token);
+        ANewFoe.updateTokenOverlay(token);
       }
     });
 
@@ -837,74 +735,14 @@ class ANewFoe {
           <i class="fas fa-eye"></i>
         </div>
       `);
-        revealBtn.click((e) => this.showRevealDialog(token));
+        revealBtn.click((e) => ANewFoe.showRevealDialog(token));
         html.find(".col.right").append(revealBtn);
       }
     });
 
     Hooks.once("ready", () => {
-      console.log(
-        `${this.ID} | Registering socket listener as ${game.user.name}`
-      );
-
-      // Register socket listener using the correct method
-      game.socket.on(`module.${this.ID}`, async (data, ack) => {
-        console.log(`${this.ID} | Socket message received:`, data);
-
-        if (data.type === "revealStat" && game.user.isGM) {
-          console.log(`${this.ID} | GM handling stat reveal:`, data);
-          try {
-            const revealedStats =
-              game.settings.get(this.ID, "revealedStats") || {};
-            const statKey = `${data.userId}.${data.actorId}`;
-
-            if (!revealedStats[statKey]) {
-              revealedStats[statKey] = [];
-            }
-
-            if (!revealedStats[statKey].includes(data.key)) {
-              revealedStats[statKey].push(data.key);
-              await game.settings.set(this.ID, "revealedStats", revealedStats);
-              console.log(
-                `${this.ID} | Updated revealed stats:`,
-                revealedStats
-              );
-
-              // Send confirmation back to player
-              game.socket.emit(`module.${this.ID}`, {
-                type: "statRevealed",
-                userId: data.userId,
-                key: data.key,
-                actorId: data.actorId,
-              });
-            }
-          } catch (error) {
-            console.error(`${this.ID} | Error in GM stat reveal:`, error);
-          }
-        }
-
-        if (data.type === "statRevealed" && data.userId === game.user.id) {
-          console.log(
-            `${this.ID} | Player received stat reveal confirmation:`,
-            data
-          );
-          try {
-            await ChatMessage.create({
-              content: `Success! You've discovered the creature's ${data.key.toUpperCase()}!`,
-              speaker: ChatMessage.getSpeaker(),
-            });
-
-            if (MonsterInfoDisplay.instance) {
-              console.log(`${this.ID} | Refreshing display after stat reveal`);
-              await MonsterInfoDisplay.instance.refresh();
-            }
-          } catch (error) {
-            console.error(`${this.ID} | Error handling stat revealed:`, error);
-          }
-        }
-
-        if (ack && typeof ack === "function") ack({ received: true });
-      });
+      console.log(`${this.ID} | Module ready as ${game.user.name}`);
+      // No socket registration needed here anymore
     });
 
     // Add new hook to catch transitions
@@ -913,8 +751,8 @@ class ANewFoe {
         const token = document.object;
         if (
           token &&
-          !this.isMonsterTypeKnown(document) &&
-          !this.isMonsterRevealed(document)
+          !ANewFoe.isMonsterTypeKnown(document) &&
+          !ANewFoe.isMonsterRevealed(document)
         ) {
           // Cancel any existing transition
           if (token._alphaTransition) {
@@ -931,8 +769,8 @@ class ANewFoe {
         const token = document.object;
         if (
           token &&
-          !this.isMonsterTypeKnown(document) &&
-          !this.isMonsterRevealed(document)
+          !ANewFoe.isMonsterTypeKnown(document) &&
+          !ANewFoe.isMonsterRevealed(document)
         ) {
           // Override the animation temporarily
           const originalTransition = token._animateVisibility;
@@ -957,8 +795,8 @@ class ANewFoe {
           const token = document.object;
           if (
             token &&
-            !this.isMonsterTypeKnown(document) &&
-            !this.isMonsterRevealed(document)
+            !ANewFoe.isMonsterTypeKnown(document) &&
+            !ANewFoe.isMonsterRevealed(document)
           ) {
             // Block standard visibility animation
             if (token._animation) token._animation.kill();
@@ -999,7 +837,7 @@ class ANewFoe {
       token.mouseInteractionManager.callbacks = {
         clickLeft: () => {
           console.log(`${this.ID} | Token clicked:`, token.name);
-          this.showTokenInfo(token);
+          ANewFoe.showTokenInfo(token);
         },
       };
     }
@@ -1007,7 +845,7 @@ class ANewFoe {
 
   static _createSimpleSilhouette(token) {
     // Remove any existing overlay
-    this._removeBlackOverlay(token);
+    ANewFoe._removeBlackOverlay(token);
 
     // Create simple black background
     const background = new PIXI.Graphics();
@@ -1022,7 +860,7 @@ class ANewFoe {
 
   static _createAnimatedOverlay(token) {
     // Remove any existing overlay first
-    this._removeBlackOverlay(token);
+    ANewFoe._removeBlackOverlay(token);
 
     // Create container for overlay elements
     const container = new PIXI.Container();
@@ -1096,11 +934,11 @@ class ANewFoe {
 
         if (isReveal) {
           // Use animated overlay only for reveals
-          this._createAnimatedOverlay(token);
+          ANewFoe._createAnimatedOverlay(token);
 
           // Remove overlay and apply silhouette after animation
           setTimeout(() => {
-            this._removeBlackOverlay(token);
+            ANewFoe._removeBlackOverlay(token);
             // Apply silhouette effect to token
             if (token.mesh) {
               token.mesh.tint = 0x000000;
@@ -1146,7 +984,7 @@ class ANewFoe {
       }
     } catch (error) {
       console.error(`${this.ID} | Error processing token visibility:`, error);
-      this._removeBlackOverlay(token);
+      ANewFoe._removeBlackOverlay(token);
       // Restore token visibility in case of error
       token.alpha = 1;
     } finally {
@@ -1171,7 +1009,7 @@ class ANewFoe {
   static async showTokenInfo(token) {
     console.log(`${this.ID} | Attempting to show token info for:`, token.name);
 
-    if (!this.isMonsterRevealed(token.document)) {
+    if (!ANewFoe.isMonsterRevealed(token.document)) {
       console.log(`${this.ID} | Token not revealed, skipping info display`);
       return;
     }
@@ -1292,10 +1130,10 @@ class ANewFoe {
       // Process all player changes before updating tokens
       const promises = [];
       for (const playerId of playersToReveal) {
-        promises.push(this.learnMonsterType(tokenDocument, playerId));
+        promises.push(ANewFoe.learnMonsterType(tokenDocument, playerId));
       }
       for (const playerId of playersToUnreveal) {
-        promises.push(this.unlearnMonsterType(tokenDocument, playerId));
+        promises.push(ANewFoe.unlearnMonsterType(tokenDocument, playerId));
       }
       await Promise.all(promises);
 
@@ -1317,7 +1155,7 @@ class ANewFoe {
 
         // Update token appearance
         if (game.user.isGM) {
-          await this.updateTokenOverlay(currentToken);
+          await ANewFoe.updateTokenOverlay(currentToken);
         }
       }
 
@@ -1375,7 +1213,7 @@ class ANewFoe {
       // Update all token overlays
       if (game.user.isGM) {
         for (const token of sameTypeTokens) {
-          await this.updateTokenOverlay(token);
+          await ANewFoe.updateTokenOverlay(token);
         }
       }
     } catch (error) {
@@ -1418,7 +1256,7 @@ class ANewFoe {
                 .find("input:checked")
                 .map((i, el) => el.value)
                 .get();
-              await this.revealMonster(token, selectedPlayers);
+              await ANewFoe.revealMonster(token, selectedPlayers);
             },
           },
           cancel: {
@@ -1474,6 +1312,52 @@ class ANewFoe {
       console.log(
         `${this.ID} | Removed monster ${actorId} from learned list for user ${userId}`
       );
+    }
+  }
+
+  // Move these methods into the ANewFoe class and make them static
+  static isMonsterTypeKnown(tokenOrDocument) {
+    try {
+      const document = tokenOrDocument.document ?? tokenOrDocument;
+      if (!document?.flags) return false;
+
+      const actorId = document.getFlag(this.ID, "actorId");
+      if (!actorId) return false;
+
+      const learnedMonsters =
+        game.settings.get(this.ID, "learnedMonsters") || {};
+      return learnedMonsters[game.user.id]?.includes(actorId) || false;
+    } catch (error) {
+      console.error(`${this.ID} | Error checking monster known status:`, error);
+      return false;
+    }
+  }
+
+  static isMonsterRevealed(tokenOrDocument) {
+    try {
+      const document = tokenOrDocument.document ?? tokenOrDocument;
+      const actorId = document.getFlag(this.ID, "actorId");
+
+      // First check if monster type is known
+      const learnedMonsters =
+        game.settings.get(this.ID, "learnedMonsters") || {};
+      if (learnedMonsters[game.user.id]?.includes(actorId)) {
+        return true;
+      }
+
+      // Then check individual token reveal status
+      const revealed = document.getFlag(this.ID, this.FLAGS.REVEALED);
+      if (!revealed) return false;
+
+      const revealedTo =
+        document.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
+      return revealedTo.includes(game.user.id);
+    } catch (error) {
+      console.error(
+        `${this.ID} | Error checking monster reveal status:`,
+        error
+      );
+      return false;
     }
   }
 }
