@@ -136,6 +136,51 @@ class MonsterInfoDisplay extends Application {
     return mod >= 0 ? `+${mod}` : mod.toString();
   }
 
+  async getPlayerModifier(ability) {
+    try {
+      const userId = game.user.id;
+      console.log(
+        `${ANewFoe.ID} | Getting modifier for ${ability}, user:`,
+        userId
+      );
+
+      // Find character owned by this player
+      const playerActor = game.actors.find((actor) => {
+        const isCharacter = actor.type === "character";
+        const isOwned =
+          actor.ownership[userId] === CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
+        console.log(`${ANewFoe.ID} | Checking actor:`, {
+          name: actor.name,
+          type: actor.type,
+          isCharacter,
+          ownership: actor.ownership,
+          isOwned,
+        });
+        return isCharacter && isOwned;
+      });
+
+      if (!playerActor) {
+        console.log(
+          `${ANewFoe.ID} | No owned character found for user ${userId}`
+        );
+        return 0;
+      }
+
+      console.log(`${ANewFoe.ID} | Found character:`, playerActor.name);
+      const modifier = playerActor.system.abilities[ability].mod;
+      console.log(
+        `${ANewFoe.ID} | Found ${ability} modifier:`,
+        modifier,
+        "for character:",
+        playerActor.name
+      );
+      return modifier;
+    } catch (error) {
+      console.error(`${ANewFoe.ID} | Error getting player modifier:`, error);
+      return 0;
+    }
+  }
+
   activateListeners(html) {
     super.activateListeners(html);
 
@@ -147,11 +192,39 @@ class MonsterInfoDisplay extends Application {
 
         console.log(`${ANewFoe.ID} | Attempting stat roll for ${key}`);
 
-        const roll = new Roll("1d20");
+        let rollFormula = "1d20";
+        const usePlayerStats = game.settings.get(ANewFoe.ID, "usePlayerStats");
+        console.log(
+          `${ANewFoe.ID} | Use player stats setting:`,
+          usePlayerStats
+        );
+
+        if (usePlayerStats && this.isAbilityCheck(key)) {
+          const modifier = await this.getPlayerModifier(key);
+          if (modifier !== 0) {
+            rollFormula = `1d20 + ${modifier}`;
+          }
+          console.log(
+            `${ANewFoe.ID} | Roll formula with modifier: ${rollFormula}`
+          );
+        }
+
+        const roll = new Roll(rollFormula);
         await roll.evaluate();
 
+        console.log(`${ANewFoe.ID} | Roll result:`, {
+          formula: roll.formula,
+          total: roll.total,
+          dc: dc,
+        });
+
+        let rollMessage = `Attempting to discern ${key.toUpperCase()}...`;
+        if (usePlayerStats && this.isAbilityCheck(key)) {
+          rollMessage += ` (${key.toUpperCase()} Check with ${roll.formula})`;
+        }
+
         await ChatMessage.create({
-          flavor: `Attempting to discern ${key.toUpperCase()}...`,
+          flavor: rollMessage,
           speaker: ChatMessage.getSpeaker(),
           rolls: [roll],
           sound: CONFIG.sounds.dice,
@@ -181,6 +254,12 @@ class MonsterInfoDisplay extends Application {
         console.error(`${ANewFoe.ID} | Error in stat roll:`, error);
       }
     });
+  }
+
+  isAbilityCheck(key) {
+    const isAbility = ["str", "dex", "con", "int", "wis", "cha"].includes(key);
+    console.log(`${ANewFoe.ID} | Is ability check for ${key}:`, isAbility);
+    return isAbility;
   }
 
   async refresh() {
@@ -409,6 +488,15 @@ class ANewFoe {
       type: Object,
       default: {},
     });
+
+    game.settings.register(this.ID, "usePlayerStats", {
+      name: "Use Player Character Stats",
+      hint: "If enabled, ability checks will use the player's owned character's modifiers instead of flat d20 rolls",
+      type: Boolean,
+      default: false,
+      config: true,
+      scope: "world",
+    });
   }
 
   static registerSocketListeners() {
@@ -480,6 +568,19 @@ class ANewFoe {
 
   static async _handlePlayerStatReveal(data) {
     try {
+      // Prevent duplicate messages by checking if this exact message was recently sent
+      const key = `${this.ID}-lastReveal-${data.userId}-${data.key}`;
+      const now = Date.now();
+      const lastReveal = window[key] || 0;
+
+      // If less than 100ms has passed since last reveal message, skip
+      if (now - lastReveal < 100) {
+        console.log(`${this.ID} | Skipping duplicate reveal message`);
+        return;
+      }
+
+      window[key] = now;
+
       await ChatMessage.create({
         content: `Success! You've discovered the creature's ${data.key.toUpperCase()}!`,
         speaker: ChatMessage.getSpeaker(),
