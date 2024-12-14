@@ -280,6 +280,13 @@ class ANewFoe {
             await this.handleSetTokenFlags(data);
           }
           break;
+        case "refreshScene":
+          if (data.playerIds.includes(game.user.id)) {
+            await canvas.draw();
+            await canvas.perception.initialize();
+            await canvas.tokens.draw();
+          }
+          break;
       }
     } catch (error) {
       console.error(`${this.ID} | Error handling socket message:`, error);
