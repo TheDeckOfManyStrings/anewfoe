@@ -970,13 +970,13 @@ class ANewFoe {
     token.blackOverlay = container;
   }
 
-  static _removeBlackOverlay(token) {
+  static async _removeBlackOverlay(token) {
     if (token.blackOverlay) {
       // Cancel animation frame if it exists
       if (token.blackOverlay.animationFrame) {
         cancelAnimationFrame(token.blackOverlay.animationFrame);
       }
-      token.blackOverlay.destroy();
+      token.blackOverlay.destroy({ children: true });
       token.blackOverlay = null;
     }
   }
@@ -1101,62 +1101,185 @@ class ANewFoe {
   static async updateTokenOverlay(token) {
     if (!game.user.isGM || !token?.document?.flags) return;
 
-    // Clean up existing overlay
-    if (token.revealOverlay) {
-      try {
-        token.revealOverlay.destroy({ children: true });
-      } catch (error) {
-        console.error(`${this.ID} | Error cleaning up overlay:`, error);
+    try {
+      // Clean up existing overlay safely
+      if (token.revealOverlay) {
+        if (
+          token.revealOverlay.destroy &&
+          typeof token.revealOverlay.destroy === "function"
+        ) {
+          token.revealOverlay.destroy({ children: true });
+        } else {
+          token.removeChild(token.revealOverlay);
+        }
+        token.revealOverlay = null;
       }
-      token.revealOverlay = null;
+
+      const players = game.users.filter((u) => !u.isGM);
+      if (players.length === 0) return;
+
+      // Calculate how many players know this monster
+      const knownCount = players.reduce((count, player) => {
+        const actorId = token.document.getFlag(this.ID, "actorId");
+        const learnedMonsters =
+          game.settings.get(this.ID, "learnedMonsters") || {};
+        const revealedTo =
+          token.document.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
+
+        const knows =
+          learnedMonsters[player.id]?.includes(actorId) ||
+          revealedTo.includes(player.id);
+
+        return count + (knows ? 1 : 0);
+      }, 0);
+
+      if (knownCount >= players.length) return; // All players know it
+
+      // Create new overlay
+      const overlay = new PIXI.Graphics();
+      const color = knownCount === 0 ? 0xff0000 : 0xffa500;
+
+      overlay.lineStyle(3, color, 0.8);
+      overlay.drawRoundedRect(0, 0, token.w, token.h, 5);
+
+      const radius = Math.min(token.w, token.h) * 0.15;
+      overlay.beginFill(color, 0.8);
+      overlay.drawCircle(radius, radius, radius);
+      overlay.endFill();
+
+      if (knownCount > 0) {
+        const text = new PIXI.Text(knownCount.toString(), {
+          fontSize: radius * 1.5,
+          fill: "white",
+          fontFamily: "Arial Black",
+        });
+        text.anchor.set(0.5);
+        text.position.set(radius, radius);
+        overlay.addChild(text);
+      }
+
+      token.addChild(overlay);
+      token.revealOverlay = overlay;
+      overlay.zIndex = 999;
+    } catch (error) {
+      console.error(`${this.ID} | Error updating token overlay:`, error);
     }
+  }
 
-    const players = game.users.filter((u) => !u.isGM);
-    if (players.length === 0) return;
+  static async revealMonster(token, selectedPlayerIds) {
+    console.log(`${this.ID} | Starting reveal process`);
 
-    // Calculate how many players know this monster
-    const knownCount = players.reduce((count, player) => {
-      const actorId = token.document.getFlag(this.ID, "actorId");
-      const learnedMonsters =
-        game.settings.get(this.ID, "learnedMonsters") || {};
-      const revealedTo =
-        token.document.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
+    try {
+      const tokenDocument = token.document;
+      const actorId = tokenDocument.getFlag(this.ID, "actorId");
+      const currentlyRevealedTo =
+        tokenDocument.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
 
-      const knows =
-        learnedMonsters[player.id]?.includes(actorId) ||
-        revealedTo.includes(player.id);
+      // Find all tokens of the same type
+      const sameTypeTokens = canvas.tokens.placeables.filter(
+        (t) => t.document.getFlag(this.ID, "actorId") === actorId
+      );
 
-      return count + (knows ? 1 : 0);
-    }, 0);
+      // Handle reveals and unreveals
+      const playersToReveal = selectedPlayerIds.filter(
+        (id) => !currentlyRevealedTo.includes(id)
+      );
+      const playersToUnreveal = currentlyRevealedTo.filter(
+        (id) => !selectedPlayerIds.includes(id)
+      );
 
-    if (knownCount >= players.length) return; // All players know it
+      // Process all player changes before updating tokens
+      const promises = [];
+      for (const playerId of playersToReveal) {
+        promises.push(this.learnMonsterType(tokenDocument, playerId));
+      }
+      for (const playerId of playersToUnreveal) {
+        promises.push(this.unlearnMonsterType(tokenDocument, playerId));
+      }
+      await Promise.all(promises);
 
-    // Create overlay
-    const overlay = new PIXI.Graphics();
-    const color = knownCount === 0 ? 0xff0000 : 0xffa500;
+      // Update each token's reveal state and appearance
+      for (const currentToken of sameTypeTokens) {
+        const currentDoc = currentToken.document;
 
-    overlay.lineStyle(3, color, 0.8);
-    overlay.drawRoundedRect(0, 0, token.w, token.h, 5);
+        // Update reveal flags
+        await currentDoc.setFlag(
+          this.ID,
+          this.FLAGS.REVEALED,
+          selectedPlayerIds.length > 0
+        );
+        await currentDoc.setFlag(
+          this.ID,
+          this.FLAGS.REVEALED_TO,
+          selectedPlayerIds
+        );
 
-    const radius = Math.min(token.w, token.h) * 0.15;
-    overlay.beginFill(color, 0.8);
-    overlay.drawCircle(radius, radius, radius);
-    overlay.endFill();
+        // Update token appearance
+        if (game.user.isGM) {
+          await this.updateTokenOverlay(currentToken);
+        }
+      }
 
-    if (knownCount > 0) {
-      const text = new PIXI.Text(knownCount.toString(), {
-        fontSize: radius * 1.5,
-        fill: "white",
-        fontFamily: "Arial Black",
+      // Update actor permissions
+      if (token.actor) {
+        const updates = {
+          "permission.default": CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED,
+        };
+
+        // Reset permissions for unrevealed players
+        for (const playerId of playersToUnreveal) {
+          updates[`permission.${playerId}`] =
+            CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED;
+        }
+
+        // Set permissions for revealed players
+        for (const playerId of selectedPlayerIds) {
+          updates[`permission.${playerId}`] =
+            CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
+        }
+
+        await token.actor.update(updates);
+      }
+
+      // Send notifications
+      if (playersToReveal.length > 0) {
+        await ChatMessage.create({
+          content: `${sameTypeTokens.length} creature${
+            sameTypeTokens.length > 1 ? "s have" : " has"
+          } been revealed to you.`,
+          whisper: playersToReveal,
+          speaker: ChatMessage.getSpeaker({ alias: "System" }),
+        });
+      }
+
+      if (playersToUnreveal.length > 0) {
+        await ChatMessage.create({
+          content: `${sameTypeTokens.length} creature${
+            sameTypeTokens.length > 1 ? "s have" : " has"
+          } been hidden from you.`,
+          whisper: playersToUnreveal,
+          speaker: ChatMessage.getSpeaker({ alias: "System" }),
+        });
+      }
+
+      // Force scene refresh for affected players
+      const affectedPlayers = [
+        ...new Set([...playersToReveal, ...playersToUnreveal]),
+      ];
+      game.socket.emit(`module.${this.ID}`, {
+        type: "refreshScene",
+        playerIds: affectedPlayers,
       });
-      text.anchor.set(0.5);
-      text.position.set(radius, radius);
-      overlay.addChild(text);
-    }
 
-    token.addChild(overlay);
-    token.revealOverlay = overlay;
-    overlay.zIndex = -1;
+      // Update all token overlays
+      if (game.user.isGM) {
+        for (const token of sameTypeTokens) {
+          await this.updateTokenOverlay(token);
+        }
+      }
+    } catch (error) {
+      console.error(`${this.ID} | Error in reveal monster:`, error);
+    }
   }
 
   static async showRevealDialog(token) {
@@ -1210,149 +1333,6 @@ class ANewFoe {
         classes: ["reveal-monster-window"], // Add additional class for the window
       }
     ).render(true);
-  }
-
-  static async revealMonster(token, selectedPlayerIds) {
-    console.log(`${this.ID} | Starting reveal process`);
-
-    const tokenDocument = token.document;
-    const actorId = tokenDocument.getFlag(this.ID, "actorId");
-    const currentlyRevealedTo =
-      tokenDocument.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
-
-    // Find all tokens of the same type
-    const sameTypeTokens = canvas.tokens.placeables.filter(
-      (t) => t.document.getFlag(this.ID, "actorId") === actorId
-    );
-
-    // Determine which players need to be revealed to and which need to be unrevealed
-    const playersToReveal = selectedPlayerIds.filter(
-      (id) => !currentlyRevealedTo.includes(id)
-    );
-    const playersToUnreveal = currentlyRevealedTo.filter(
-      (id) => !selectedPlayerIds.includes(id)
-    );
-
-    // Handle reveals and unreveals using properly scoped method calls
-    const promises = [];
-    for (const playerId of playersToReveal) {
-      promises.push(this.learnMonsterType(tokenDocument, playerId));
-    }
-    for (const playerId of playersToUnreveal) {
-      promises.push(this.unlearnMonsterType(tokenDocument, playerId));
-    }
-    await Promise.all(promises);
-
-    // Process each token
-    for (const currentToken of sameTypeTokens) {
-      const currentDoc = currentToken.document;
-      const originalImage = currentDoc.getFlag(this.ID, "originalImage");
-      const originalName = currentDoc.getFlag(this.ID, "originalName");
-      const originalTint = currentDoc.getFlag(this.ID, "originalTint");
-      const tokenData = currentDoc.toJSON();
-      const { x, y, elevation, rotation } = tokenData;
-
-      // Update reveal flags
-      await currentDoc.setFlag(
-        this.ID,
-        this.FLAGS.REVEALED,
-        selectedPlayerIds.length > 0
-      );
-      await currentDoc.setFlag(
-        this.ID,
-        this.FLAGS.REVEALED_TO,
-        selectedPlayerIds
-      );
-
-      // Recreate token with appropriate appearance
-      if (game.user.isGM) {
-        console.log(`${this.ID} | Updating token appearance`);
-        const newTokenData = {
-          ...tokenData,
-          x,
-          y,
-          elevation,
-          rotation,
-          "texture.src": originalImage,
-          "texture.tint": originalTint || 0xffffff,
-          name: originalName,
-          displayName: CONST.TOKEN_DISPLAY_MODES.OWNER_HOVER,
-          flags: {
-            ...tokenData.flags,
-            [this.ID]: {
-              revealed: selectedPlayerIds.length > 0,
-              revealedTo: selectedPlayerIds,
-              originalImage,
-              originalName,
-              originalTint,
-              actorId,
-            },
-          },
-        };
-
-        await currentDoc.delete();
-        await canvas.scene.createEmbeddedDocuments("Token", [newTokenData]);
-      }
-    }
-
-    // Update actor permissions
-    const actor = token.actor;
-    if (actor) {
-      const updates = {
-        "permission.default": CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED,
-      };
-
-      // Reset permissions for unrevealed players
-      for (const playerId of playersToUnreveal) {
-        updates[`permission.${playerId}`] =
-          CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED;
-      }
-
-      // Set permissions for revealed players
-      for (const playerId of selectedPlayerIds) {
-        updates[`permission.${playerId}`] =
-          CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
-      }
-
-      await actor.update(updates);
-    }
-
-    // Update GM overlays
-    if (game.user.isGM) {
-      for (const token of sameTypeTokens) {
-        await this.updateTokenOverlay(token);
-      }
-    }
-
-    // Notify affected players
-    if (playersToReveal.length > 0) {
-      await ChatMessage.create({
-        content: `${sameTypeTokens.length} creature${
-          sameTypeTokens.length > 1 ? "s have" : " has"
-        } been revealed to you.`,
-        whisper: playersToReveal,
-        speaker: ChatMessage.getSpeaker({ alias: "System" }),
-      });
-    }
-
-    if (playersToUnreveal.length > 0) {
-      await ChatMessage.create({
-        content: `${sameTypeTokens.length} creature${
-          sameTypeTokens.length > 1 ? "s have" : " has"
-        } been hidden from you.`,
-        whisper: playersToUnreveal,
-        speaker: ChatMessage.getSpeaker({ alias: "System" }),
-      });
-    }
-
-    // Request scene refresh for all affected players
-    const affectedPlayers = [
-      ...new Set([...playersToReveal, ...playersToUnreveal]),
-    ];
-    game.socket.emit(`module.${this.ID}`, {
-      type: "refreshScene",
-      playerIds: affectedPlayers,
-    });
   }
 
   static async learnMonsterType(tokenDocument, userId) {
