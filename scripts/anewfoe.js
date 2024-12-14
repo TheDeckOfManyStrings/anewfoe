@@ -144,35 +144,25 @@ class MonsterInfoDisplay extends Application {
         userId
       );
 
-      // Find character owned by this player
-      const playerActor = game.actors.find((actor) => {
-        const isCharacter = actor.type === "character";
-        const isOwned =
-          actor.ownership[userId] === CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
-        console.log(`${ANewFoe.ID} | Checking actor:`, {
-          name: actor.name,
-          type: actor.type,
-          isCharacter,
-          ownership: actor.ownership,
-          isOwned,
-        });
-        return isCharacter && isOwned;
-      });
-
-      if (!playerActor) {
+      // Get the user's assigned character from their profile
+      const user = game.users.get(userId);
+      if (!user?.character) {
         console.log(
-          `${ANewFoe.ID} | No owned character found for user ${userId}`
+          `${ANewFoe.ID} | No character assigned in user profile for ${userId}`
         );
         return 0;
       }
 
-      console.log(`${ANewFoe.ID} | Found character:`, playerActor.name);
-      const modifier = playerActor.system.abilities[ability].mod;
+      console.log(
+        `${ANewFoe.ID} | Found character from profile:`,
+        user.character.name
+      );
+      const modifier = user.character.system.abilities[ability].mod;
       console.log(
         `${ANewFoe.ID} | Found ${ability} modifier:`,
         modifier,
         "for character:",
-        playerActor.name
+        user.character.name
       );
       return modifier;
     } catch (error) {
