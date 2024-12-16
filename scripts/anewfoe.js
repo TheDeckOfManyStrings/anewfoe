@@ -255,6 +255,8 @@ class MonsterInfoDisplay extends Application {
           ui.notifications.info(
             "Your request to discover the stat has been sent to the GM for approval."
           );
+          // Add animation over the token
+          ANewFoe.addWaitingAnimation(this.token);
           return;
         }
 
@@ -488,16 +490,10 @@ class ANewFoe {
           await this.handleStatRollRequest(data);
           break;
         case "statRollApproved":
-          if (game.user.id === data.userId) {
-            await MonsterInfoDisplay.instance.processApprovedStatRoll(data);
-          }
+          await this.handleStatRollApproved(data);
           break;
         case "statRollRejected":
-          if (game.user.id === data.userId) {
-            ui.notifications.warn(
-              "Your request to discover the stat was rejected by the GM."
-            );
-          }
+          await this.handleStatRollRejected(data);
           break;
       }
     } catch (error) {
@@ -598,12 +594,19 @@ class ANewFoe {
     const key = data.key;
     const dc = data.dc;
     const usePlayerStats = data.usePlayerStats;
+    const tokenId = data.tokenId;
 
     const content = `<p>${
       user.name
     } wants to roll to discover <strong>${key.toUpperCase()}</strong> of <strong>${
       actor.name
     }</strong>. Allow?</p>`;
+
+    // Add animation on GM's screen
+    const token = canvas.tokens.get(tokenId);
+    if (token) {
+      this.addWaitingAnimation(token);
+    }
 
     new Dialog({
       title: "Approve Stat Roll",
@@ -612,6 +615,10 @@ class ANewFoe {
         approve: {
           label: "Approve",
           callback: async () => {
+            // Remove animation from GM's screen
+            if (token) {
+              ANewFoe.removeWaitingAnimation(token);
+            }
             // Send a message back to the player to proceed with the roll
             game.socket.emit(`module.${this.ID}`, {
               type: "statRollApproved",
@@ -627,16 +634,96 @@ class ANewFoe {
         reject: {
           label: "Reject",
           callback: async () => {
+            // Remove animation from GM's screen
+            if (token) {
+              ANewFoe.removeWaitingAnimation(token);
+            }
             // Notify the player that the request was rejected
             game.socket.emit(`module.${this.ID}`, {
               type: "statRollRejected",
               userId: data.userId,
+              tokenId: data.tokenId,
             });
           },
         },
       },
       default: "approve",
     }).render(true);
+  }
+
+  static async handleStatRollApproved(data) {
+    if (game.user.id !== data.userId) return;
+    const display = MonsterInfoDisplay.instance;
+    if (display) {
+      // Remove animation from player's screen
+      ANewFoe.removeWaitingAnimation(display.token);
+      // Proceed with the roll
+      await display.processApprovedStatRoll(data);
+    }
+  }
+
+  static async handleStatRollRejected(data) {
+    if (game.user.id !== data.userId) return;
+    const display = MonsterInfoDisplay.instance;
+    if (display) {
+      // Remove animation from player's screen
+      ANewFoe.removeWaitingAnimation(display.token);
+      ui.notifications.info("Your request was rejected by the GM.");
+    }
+  }
+
+  static addWaitingAnimation(token) {
+    if (token.waitingAnimation) return;
+
+    const container = new PIXI.Container();
+    container.zIndex = 1000;
+
+    const questionMark = new PIXI.Text("?", {
+      fontFamily: "Arial",
+      fontSize: Math.min(token.w, token.h) * 0.8,
+      fill: 0xffff00,
+      align: "center",
+      fontWeight: "bold",
+      dropShadow: true,
+      dropShadowColor: 0x000000,
+      dropShadowDistance: 2,
+      dropShadowAngle: Math.PI / 4,
+      dropShadowBlur: 4,
+    });
+
+    questionMark.anchor.set(0.5);
+    questionMark.position.set(token.w / 2, token.h / 2);
+    container.addChild(questionMark);
+
+    // Animation
+    let animationFrame;
+    const animate = () => {
+      // Add a check to ensure questionMark is still valid
+      if (!questionMark || !questionMark.parent) {
+        return;
+      }
+
+      const time = Date.now() / 500;
+      const scaleChange = Math.sin(time) * 0.25;
+      questionMark.scale.set(1 + scaleChange);
+      questionMark.rotation = Math.sin(time) * 0.2;
+      animationFrame = requestAnimationFrame(animate);
+    };
+    animate();
+
+    container.animationFrame = animationFrame;
+    token.addChild(container);
+    token.waitingAnimation = container;
+  }
+
+  static removeWaitingAnimation(token) {
+    if (token.waitingAnimation) {
+      if (token.waitingAnimation.animationFrame) {
+        cancelAnimationFrame(token.waitingAnimation.animationFrame);
+      }
+      token.waitingAnimation.destroy({ children: true });
+      token.waitingAnimation = null;
+    }
   }
 
   static registerSettings() {
