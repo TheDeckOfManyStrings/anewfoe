@@ -237,6 +237,27 @@ class MonsterInfoDisplay extends Application {
           usePlayerStats
         );
 
+        const requireApproval = game.settings.get(
+          ANewFoe.ID,
+          "requireGMApproval"
+        );
+        if (requireApproval && !game.user.isGM) {
+          // Send a request to the GM for approval
+          game.socket.emit(`module.${ANewFoe.ID}`, {
+            type: "requestStatRoll",
+            userId: game.user.id,
+            actorId: this.actor.id,
+            tokenId: this.token.id,
+            key: key,
+            dc: dc,
+            usePlayerStats: usePlayerStats,
+          });
+          ui.notifications.info(
+            "Your request to discover the stat has been sent to the GM for approval."
+          );
+          return;
+        }
+
         if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
           // Changed to static call
           const modifier = await this.getPlayerModifier(key);
@@ -341,6 +362,47 @@ class MonsterInfoDisplay extends Application {
     await super._render(force, options);
     this.setPosition();
   }
+
+  async processApprovedStatRoll(data) {
+    const key = data.key;
+    const dc = data.dc;
+    const usePlayerStats = data.usePlayerStats;
+    let rollFormula = "1d20";
+
+    if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
+      const modifier = await this.getPlayerModifier(key);
+      if (modifier !== 0) {
+        rollFormula += modifier >= 0 ? `+${modifier}` : `${modifier}`;
+      }
+    }
+
+    const roll = new Roll(rollFormula);
+    await roll.evaluate();
+
+    let rollMessage = `Attempting to discern ${key.toUpperCase()}...`;
+    if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
+      rollMessage += ` (${key.toUpperCase()} Check with ${roll.formula})`;
+    }
+
+    await ChatMessage.create({
+      flavor: rollMessage,
+      speaker: ChatMessage.getSpeaker(),
+      rolls: [roll],
+      sound: CONFIG.sounds.dice,
+    });
+
+    if (roll.total >= dc) {
+      // Send message to GM to reveal the stat
+      game.socket.emit(`module.${ANewFoe.ID}`, {
+        type: "revealStat",
+        userId: game.user.id,
+        actorId: data.actorId,
+        key: key,
+      });
+    } else {
+      ui.notifications.info("The check failed to reveal the stat.");
+    }
+  }
 }
 
 class ANewFoe {
@@ -420,6 +482,21 @@ class ANewFoe {
             await canvas.draw();
             await canvas.perception.initialize();
             await canvas.tokens.draw();
+          }
+          break;
+        case "requestStatRoll":
+          await this.handleStatRollRequest(data);
+          break;
+        case "statRollApproved":
+          if (game.user.id === data.userId) {
+            await MonsterInfoDisplay.instance.processApprovedStatRoll(data);
+          }
+          break;
+        case "statRollRejected":
+          if (game.user.id === data.userId) {
+            ui.notifications.warn(
+              "Your request to discover the stat was rejected by the GM."
+            );
           }
           break;
       }
@@ -514,6 +591,54 @@ class ANewFoe {
     }
   }
 
+  static async handleStatRollRequest(data) {
+    if (!game.user.isGM) return;
+    const user = game.users.get(data.userId);
+    const actor = game.actors.get(data.actorId);
+    const key = data.key;
+    const dc = data.dc;
+    const usePlayerStats = data.usePlayerStats;
+
+    const content = `<p>${
+      user.name
+    } wants to roll to discover <strong>${key.toUpperCase()}</strong> of <strong>${
+      actor.name
+    }</strong>. Allow?</p>`;
+
+    new Dialog({
+      title: "Approve Stat Roll",
+      content: content,
+      buttons: {
+        approve: {
+          label: "Approve",
+          callback: async () => {
+            // Send a message back to the player to proceed with the roll
+            game.socket.emit(`module.${this.ID}`, {
+              type: "statRollApproved",
+              userId: data.userId,
+              actorId: data.actorId,
+              tokenId: data.tokenId,
+              key: key,
+              dc: dc,
+              usePlayerStats: usePlayerStats,
+            });
+          },
+        },
+        reject: {
+          label: "Reject",
+          callback: async () => {
+            // Notify the player that the request was rejected
+            game.socket.emit(`module.${this.ID}`, {
+              type: "statRollRejected",
+              userId: data.userId,
+            });
+          },
+        },
+      },
+      default: "approve",
+    }).render(true);
+  }
+
   static registerSettings() {
     console.log(`${this.ID} | Registering settings`);
 
@@ -599,6 +724,15 @@ class ANewFoe {
       type: Number,
       default: 15,
       range: { min: 1, max: 30, step: 1 },
+    });
+
+    game.settings.register(this.ID, "requireGMApproval", {
+      name: "Require GM Approval for Stat Rolls",
+      hint: "If enabled, the GM must approve all player rolls to discover monster stats.",
+      scope: "world",
+      config: true,
+      type: Boolean,
+      default: true,
     });
   }
 
