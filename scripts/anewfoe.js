@@ -49,6 +49,8 @@ class MonsterInfoDisplay extends Application {
       speed.push(`Swim ${this.actor.system.attributes.movement.swim} ft.`);
     }
 
+    const dcValues = this._calculateDCs();
+
     return {
       name: this.actor.name,
       img: this.actor.img,
@@ -58,21 +60,21 @@ class MonsterInfoDisplay extends Application {
           value: this.actor.system.attributes.hp.value,
           key: "hp",
           revealed: playerStats.includes("hp"),
-          dc: 12,
+          dc: dcValues["hp"],
         },
         {
           label: "Armor Class",
           value: this.actor.system.attributes.ac.value,
           key: "ac",
           revealed: playerStats.includes("ac"),
-          dc: 12,
+          dc: dcValues["ac"],
         },
         {
           label: "Speed",
           value: speed.join(", "),
           key: "speed",
           revealed: playerStats.includes("speed"),
-          dc: 10,
+          dc: dcValues["speed"],
         },
         {
           label: "Strength",
@@ -81,7 +83,7 @@ class MonsterInfoDisplay extends Application {
           )})`,
           key: "str",
           revealed: playerStats.includes("str"),
-          dc: 15,
+          dc: dcValues["str"],
         },
         {
           label: "Dexterity",
@@ -90,7 +92,7 @@ class MonsterInfoDisplay extends Application {
           )})`,
           key: "dex",
           revealed: playerStats.includes("dex"),
-          dc: 15,
+          dc: dcValues["dex"],
         },
         {
           label: "Constitution",
@@ -99,7 +101,7 @@ class MonsterInfoDisplay extends Application {
           )})`,
           key: "con",
           revealed: playerStats.includes("con"),
-          dc: 15,
+          dc: dcValues["con"],
         },
         {
           label: "Intelligence",
@@ -108,7 +110,7 @@ class MonsterInfoDisplay extends Application {
           )})`,
           key: "int",
           revealed: playerStats.includes("int"),
-          dc: 15,
+          dc: dcValues["int"],
         },
         {
           label: "Wisdom",
@@ -117,7 +119,7 @@ class MonsterInfoDisplay extends Application {
           )})`,
           key: "wis",
           revealed: playerStats.includes("wis"),
-          dc: 15,
+          dc: dcValues["wis"],
         },
         {
           label: "Charisma",
@@ -126,7 +128,7 @@ class MonsterInfoDisplay extends Application {
           )})`,
           key: "cha",
           revealed: playerStats.includes("cha"),
-          dc: 15,
+          dc: dcValues["cha"],
         },
       ],
     };
@@ -134,6 +136,52 @@ class MonsterInfoDisplay extends Application {
 
   _getModifier(mod) {
     return mod >= 0 ? `+${mod}` : mod.toString();
+  }
+
+  _calculateDCs() {
+    const method = game.settings.get(ANewFoe.ID, "dcCalculationMethod");
+    const defaultDCs = {
+      hp: 12,
+      ac: 12,
+      speed: 10,
+      str: 15,
+      dex: 15,
+      con: 15,
+      int: 15,
+      wis: 15,
+      cha: 15,
+    };
+    const dcValues = {};
+
+    switch (method) {
+      case "standardArray":
+        return defaultDCs;
+      case "fixedValue":
+        const fixedDC = game.settings.get(ANewFoe.ID, "fixedDCValue") || 15;
+        for (const key in defaultDCs) {
+          dcValues[key] = fixedDC;
+        }
+        return dcValues;
+      case "challengeRatingScaling":
+        const cr = this.actor.system.details.cr || 0;
+        const scaledDC = this._calculateCRBasedDC(cr);
+        for (const key in defaultDCs) {
+          dcValues[key] = scaledDC;
+        }
+        return dcValues;
+      default:
+        return defaultDCs;
+    }
+  }
+
+  _calculateCRBasedDC(cr) {
+    // Non-linear scaling from 10 (CR 0) to 30 (CR 30)
+    // Using an exponential formula for smooth scaling
+    const maxCR = 30;
+    const minDC = 10;
+    const maxDC = 30;
+    const scaledDC = minDC + (maxDC - minDC) * Math.pow(cr / maxCR, 0.5);
+    return Math.round(scaledDC);
   }
 
   async getPlayerModifier(ability) {
@@ -526,6 +574,31 @@ class ANewFoe {
       default: false,
       config: true,
       scope: "world",
+    });
+
+    game.settings.register(this.ID, "dcCalculationMethod", {
+      name: "DC Calculation Method",
+      hint: "Choose how the DCs for stat checks are calculated.",
+      scope: "world",
+      type: String,
+      choices: {
+        standardArray: "Standard Array",
+        fixedValue: "Fixed DC",
+        challengeRatingScaling: "Scaling DC based on Challenge Rating",
+      },
+      default: "challengeRatingScaling",
+      config: true,
+    });
+
+    // If "fixedValue" is selected, provide an input for the fixed DC
+    game.settings.register(this.ID, "fixedDCValue", {
+      name: "Fixed DC Value",
+      hint: "Set the fixed DC value for all stat checks when using Fixed DC method.",
+      scope: "world",
+      config: true,
+      type: Number,
+      default: 15,
+      range: { min: 1, max: 30, step: 1 },
     });
   }
 
