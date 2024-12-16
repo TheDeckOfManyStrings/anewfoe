@@ -230,6 +230,22 @@ class MonsterInfoDisplay extends Application {
 
         console.log(`${ANewFoe.ID} | Attempting stat roll for ${key}`);
 
+        // Prevent multiple requests for the same stat
+        const isPending = ANewFoe.isRequestPending(
+          game.user.id,
+          this.actor.id,
+          key
+        );
+        if (isPending) {
+          ui.notifications.info(
+            "You have already requested this stat. Please wait for the GM's response."
+          );
+          return;
+        }
+
+        // Mark the request as pending
+        ANewFoe.addPendingRequest(game.user.id, this.actor.id, key);
+
         let rollFormula = "1d20";
         const usePlayerStats = game.settings.get(ANewFoe.ID, "usePlayerStats");
         console.log(
@@ -311,6 +327,8 @@ class MonsterInfoDisplay extends Application {
             content: `Failed to discern the creature's ${key.toUpperCase()}.`,
             speaker: ChatMessage.getSpeaker(),
           });
+          // Remove the pending request when the roll fails
+          ANewFoe.removePendingRequest(game.user.id, this.actor.id, key);
         }
       } catch (error) {
         console.error(`${ANewFoe.ID} | Error in stat roll:`, error);
@@ -403,6 +421,8 @@ class MonsterInfoDisplay extends Application {
       });
     } else {
       ui.notifications.info("The check failed to reveal the stat.");
+      // Remove the pending request when the roll fails
+      ANewFoe.removePendingRequest(game.user.id, data.actorId, key);
     }
   }
 }
@@ -431,11 +451,20 @@ class ANewFoe {
     TIMEOUT: 200,
   };
 
+  static PENDING_REQUESTS = [];
+
   static initialize() {
     console.log(`${this.ID} | Starting module initialization`);
     this.registerSettings();
     this.registerHooks();
     this.setupSocket();
+
+    // Create GM UI immediately if user is GM
+    if (game.user.isGM) {
+      console.log(`${this.ID} | Creating initial GM UI`);
+      this.createGMApprovalUI();
+    }
+
     console.log(`${this.ID} | Module initialization complete`);
   }
 
@@ -589,6 +618,15 @@ class ANewFoe {
 
   static async handleStatRollRequest(data) {
     if (!game.user.isGM) return;
+
+    console.log(`${this.ID} | GM received stat roll request`, data);
+
+    // Ensure GM UI exists
+    if (!this.gmApprovalUI) {
+      console.log(`${this.ID} | Creating GM UI for stat roll request`);
+      this.createGMApprovalUI();
+    }
+
     const user = game.users.get(data.userId);
     const actor = game.actors.get(data.actorId);
     const key = data.key;
@@ -596,11 +634,15 @@ class ANewFoe {
     const usePlayerStats = data.usePlayerStats;
     const tokenId = data.tokenId;
 
-    const content = `<p>${
-      user.name
-    } wants to roll to discover <strong>${key.toUpperCase()}</strong> of <strong>${
-      actor.name
-    }</strong>. Allow?</p>`;
+    // Add the request to the pending list with all needed data
+    this.PENDING_REQUESTS.push({
+      userId: data.userId,
+      actorId: data.actorId,
+      statKey: data.key,
+      tokenId: data.tokenId,
+      dc: data.dc,
+      usePlayerStats: data.usePlayerStats,
+    });
 
     // Add animation on GM's screen
     const token = canvas.tokens.get(tokenId);
@@ -608,47 +650,8 @@ class ANewFoe {
       this.addWaitingAnimation(token);
     }
 
-    new Dialog({
-      title: "Approve Stat Roll",
-      content: content,
-      buttons: {
-        approve: {
-          label: "Approve",
-          callback: async () => {
-            // Remove animation from GM's screen
-            if (token) {
-              ANewFoe.removeWaitingAnimation(token);
-            }
-            // Send a message back to the player to proceed with the roll
-            game.socket.emit(`module.${this.ID}`, {
-              type: "statRollApproved",
-              userId: data.userId,
-              actorId: data.actorId,
-              tokenId: data.tokenId,
-              key: key,
-              dc: dc,
-              usePlayerStats: usePlayerStats,
-            });
-          },
-        },
-        reject: {
-          label: "Reject",
-          callback: async () => {
-            // Remove animation from GM's screen
-            if (token) {
-              ANewFoe.removeWaitingAnimation(token);
-            }
-            // Notify the player that the request was rejected
-            game.socket.emit(`module.${this.ID}`, {
-              type: "statRollRejected",
-              userId: data.userId,
-              tokenId: data.tokenId,
-            });
-          },
-        },
-      },
-      default: "approve",
-    }).render(true);
+    // Update the queue UI
+    this.updateGMApprovalUI();
   }
 
   static async handleStatRollApproved(data) {
@@ -668,6 +671,8 @@ class ANewFoe {
     if (display) {
       // Remove animation from player's screen
       ANewFoe.removeWaitingAnimation(display.token);
+      // Remove the pending request when rejected
+      ANewFoe.removePendingRequest(data.userId, display.actor.id, data.key);
       ui.notifications.info("Your request was rejected by the GM.");
     }
   }
@@ -723,6 +728,198 @@ class ANewFoe {
       }
       token.waitingAnimation.destroy({ children: true });
       token.waitingAnimation = null;
+    }
+  }
+
+  static addPendingRequest(userId, actorId, statKey) {
+    try {
+      this.PENDING_REQUESTS.push({ userId, actorId, statKey });
+      console.log(`${this.ID} | Added pending request`, {
+        userId,
+        actorId,
+        statKey,
+      });
+
+      if (game.user.isGM) {
+        requestAnimationFrame(() => {
+          if (
+            !this.gmApprovalUI ||
+            !document.body.contains(this.gmApprovalUI)
+          ) {
+            console.log(`${this.ID} | Creating new GM UI for pending request`);
+            this.createGMApprovalUI();
+          }
+          this.updateGMApprovalUI();
+        });
+      }
+    } catch (error) {
+      console.error(`${this.ID} | Error adding pending request:`, error);
+    }
+  }
+
+  static removePendingRequest(userId, actorId, statKey) {
+    this.PENDING_REQUESTS = this.PENDING_REQUESTS.filter(
+      (req) =>
+        !(
+          req.userId === userId &&
+          req.actorId === actorId &&
+          req.statKey === statKey
+        )
+    );
+    console.log(`${this.ID} | Removed pending request`, {
+      userId,
+      actorId,
+      statKey,
+    });
+    this.updateGMApprovalUI();
+  }
+
+  static isRequestPending(userId, actorId, statKey) {
+    return this.PENDING_REQUESTS.some(
+      (req) =>
+        req.userId === userId &&
+        req.actorId === actorId &&
+        req.statKey === statKey
+    );
+  }
+
+  static createGMApprovalUI() {
+    if (!game.user.isGM || this.gmApprovalUI) return;
+
+    try {
+      const existingUI = document.getElementById("gm-approval-ui");
+      if (existingUI) {
+        existingUI.remove();
+      }
+
+      const uiContainer = document.createElement("div");
+      uiContainer.id = "gm-approval-ui";
+      uiContainer.style.position = "absolute";
+      uiContainer.style.bottom = "10px";
+      uiContainer.style.right = "310px";
+      uiContainer.style.zIndex = "1000";
+      uiContainer.style.padding = "10px";
+      uiContainer.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+      uiContainer.style.color = "#fff";
+      uiContainer.style.borderRadius = "5px";
+      uiContainer.style.maxWidth = "300px";
+      uiContainer.innerHTML = `
+        <h3 style="margin: 0 0 5px 0; color: #fff;">Pending Approvals</h3>
+        <ul id="gm-approval-list" style="list-style: none; margin: 0; padding: 0;"></ul>
+      `;
+
+      document.body.appendChild(uiContainer);
+      this.gmApprovalUI = uiContainer;
+      console.log(`${this.ID} | GM UI created successfully`);
+    } catch (error) {
+      console.error(`${this.ID} | Error creating GM UI:`, error);
+    }
+  }
+
+  static updateGMApprovalUI() {
+    if (!game.user.isGM) return;
+
+    try {
+      if (!this.gmApprovalUI || !document.body.contains(this.gmApprovalUI)) {
+        console.log(`${this.ID} | GM UI not found or detached, recreating...`);
+        this.createGMApprovalUI();
+      }
+
+      const list = this.gmApprovalUI?.querySelector("#gm-approval-list");
+      if (!list) {
+        console.error(`${this.ID} | GM Approval list element not found`);
+        return;
+      }
+
+      list.innerHTML = "";
+
+      this.PENDING_REQUESTS.forEach((req) => {
+        const user = game.users.get(req.userId);
+        const actor = game.actors.get(req.actorId);
+        if (!user || !actor) return;
+
+        const listItem = document.createElement("li");
+        listItem.style.cssText =
+          "display: flex; justify-content: space-between; align-items: center; margin: 5px 0; padding: 5px;";
+
+        const text = document.createElement("span");
+        text.textContent = `${
+          user.name
+        } requests ${req.statKey.toUpperCase()} of ${actor.name}`;
+        text.style.marginRight = "10px";
+
+        const buttons = document.createElement("div");
+        buttons.style.cssText = "display: flex; gap: 5px;";
+
+        const approveButton = document.createElement("button");
+        approveButton.innerHTML =
+          '<i class="fas fa-check-circle" style="color: green;"></i>';
+        approveButton.style.cssText =
+          "background: none; border: none; cursor: pointer; padding: 5px;";
+        approveButton.onclick = () => this.handleApproval(req);
+
+        const rejectButton = document.createElement("button");
+        rejectButton.innerHTML =
+          '<i class="fas fa-times-circle" style="color: red;"></i>';
+        rejectButton.style.cssText =
+          "background: none; border: none; cursor: pointer; padding: 5px;";
+        rejectButton.onclick = () => this.handleRejection(req);
+
+        buttons.append(approveButton, rejectButton);
+        listItem.append(text, buttons);
+        list.appendChild(listItem);
+      });
+
+      this.gmApprovalUI.style.display = this.PENDING_REQUESTS.length
+        ? "block"
+        : "none";
+    } catch (error) {
+      console.error(`${this.ID} | Error updating GM UI:`, error);
+    }
+  }
+
+  static handleApproval(req) {
+    const data = {
+      userId: req.userId,
+      actorId: req.actorId,
+      tokenId: req.tokenId,
+      key: req.statKey,
+      dc: req.dc,
+      usePlayerStats: req.usePlayerStats,
+    };
+
+    // Send approval message
+    game.socket.emit(`module.${this.ID}`, {
+      type: "statRollApproved",
+      ...data,
+    });
+
+    // Remove pending request and update UI
+    this.removePendingRequest(req.userId, req.actorId, req.statKey);
+
+    // Remove waiting animation from token
+    const token = canvas.tokens.get(req.tokenId);
+    if (token) {
+      this.removeWaitingAnimation(token);
+    }
+  }
+
+  static handleRejection(req) {
+    // Send rejection message
+    game.socket.emit(`module.${this.ID}`, {
+      type: "statRollRejected",
+      userId: req.userId,
+      tokenId: req.tokenId,
+      key: req.statKey, // Add the key to the rejection message
+    });
+
+    // Remove pending request and update UI
+    this.removePendingRequest(req.userId, req.actorId, req.statKey);
+
+    // Remove waiting animation from token
+    const token = canvas.tokens.get(req.tokenId);
+    if (token) {
+      this.removeWaitingAnimation(token);
     }
   }
 
@@ -1026,7 +1223,10 @@ class ANewFoe {
 
     Hooks.once("ready", () => {
       console.log(`${this.ID} | Module ready as ${game.user.name}`);
-      // No socket registration needed here anymore
+      if (game.user.isGM && !this.gmApprovalUI) {
+        console.log(`${this.ID} | Creating GM UI on ready`);
+        this.createGMApprovalUI();
+      }
     });
 
     // Add new hook to catch transitions
@@ -1103,6 +1303,23 @@ class ANewFoe {
       },
       { priority: 100 }
     ); // High priority to run before other hooks
+
+    Hooks.on("canvasReady", () => {
+      if (game.user.isGM) {
+        console.log(`${this.ID} | Canvas ready, ensuring GM UI exists`);
+        if (!this.gmApprovalUI) {
+          this.createGMApprovalUI();
+        }
+      }
+    });
+
+    // Clean up when the game closes
+    Hooks.on("closeApplication", () => {
+      if (this.gmApprovalUI) {
+        this.gmApprovalUI.remove();
+        this.gmApprovalUI = null;
+      }
+    });
   }
 
   static _makeTokenClickable(token) {
