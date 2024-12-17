@@ -271,8 +271,6 @@ class MonsterInfoDisplay extends Application {
           ui.notifications.info(
             "Your request to discover the stat has been sent to the GM for approval."
           );
-          // Add animation over the token
-          ANewFoe.addWaitingAnimation(this.token);
           return;
         }
 
@@ -644,12 +642,6 @@ class ANewFoe {
       usePlayerStats: data.usePlayerStats,
     });
 
-    // Add animation on GM's screen
-    const token = canvas.tokens.get(tokenId);
-    if (token) {
-      this.addWaitingAnimation(token);
-    }
-
     // Update the queue UI
     this.updateGMApprovalUI();
   }
@@ -658,8 +650,6 @@ class ANewFoe {
     if (game.user.id !== data.userId) return;
     const display = MonsterInfoDisplay.instance;
     if (display) {
-      // Remove animation from player's screen
-      ANewFoe.removeWaitingAnimation(display.token);
       // Proceed with the roll
       await display.processApprovedStatRoll(data);
     }
@@ -669,65 +659,9 @@ class ANewFoe {
     if (game.user.id !== data.userId) return;
     const display = MonsterInfoDisplay.instance;
     if (display) {
-      // Remove animation from player's screen
-      ANewFoe.removeWaitingAnimation(display.token);
       // Remove the pending request when rejected
       ANewFoe.removePendingRequest(data.userId, display.actor.id, data.key);
       ui.notifications.info("Your request was rejected by the GM.");
-    }
-  }
-
-  static addWaitingAnimation(token) {
-    if (token.waitingAnimation) return;
-
-    const container = new PIXI.Container();
-    container.zIndex = 1000;
-
-    const questionMark = new PIXI.Text("?", {
-      fontFamily: "Arial",
-      fontSize: Math.min(token.w, token.h) * 0.8,
-      fill: 0xffff00,
-      align: "center",
-      fontWeight: "bold",
-      dropShadow: true,
-      dropShadowColor: 0x000000,
-      dropShadowDistance: 2,
-      dropShadowAngle: Math.PI / 4,
-      dropShadowBlur: 4,
-    });
-
-    questionMark.anchor.set(0.5);
-    questionMark.position.set(token.w / 2, token.h / 2);
-    container.addChild(questionMark);
-
-    // Animation
-    let animationFrame;
-    const animate = () => {
-      // Add a check to ensure questionMark is still valid
-      if (!questionMark || !questionMark.parent) {
-        return;
-      }
-
-      const time = Date.now() / 500;
-      const scaleChange = Math.sin(time) * 0.25;
-      questionMark.scale.set(1 + scaleChange);
-      questionMark.rotation = Math.sin(time) * 0.2;
-      animationFrame = requestAnimationFrame(animate);
-    };
-    animate();
-
-    container.animationFrame = animationFrame;
-    token.addChild(container);
-    token.waitingAnimation = container;
-  }
-
-  static removeWaitingAnimation(token) {
-    if (token.waitingAnimation) {
-      if (token.waitingAnimation.animationFrame) {
-        cancelAnimationFrame(token.waitingAnimation.animationFrame);
-      }
-      token.waitingAnimation.destroy({ children: true });
-      token.waitingAnimation = null;
     }
   }
 
@@ -896,12 +830,6 @@ class ANewFoe {
 
     // Remove pending request and update UI
     this.removePendingRequest(req.userId, req.actorId, req.statKey);
-
-    // Remove waiting animation from token
-    const token = canvas.tokens.get(req.tokenId);
-    if (token) {
-      this.removeWaitingAnimation(token);
-    }
   }
 
   static handleRejection(req) {
@@ -915,12 +843,6 @@ class ANewFoe {
 
     // Remove pending request and update UI
     this.removePendingRequest(req.userId, req.actorId, req.statKey);
-
-    // Remove waiting animation from token
-    const token = canvas.tokens.get(req.tokenId);
-    if (token) {
-      this.removeWaitingAnimation(token);
-    }
   }
 
   static registerSettings() {
