@@ -243,22 +243,14 @@ class MonsterInfoDisplay extends Application {
           return;
         }
 
-        // Mark the request as pending
-        ANewFoe.addPendingRequest(game.user.id, this.actor.id, key);
-
-        let rollFormula = "1d20";
         const usePlayerStats = game.settings.get(ANewFoe.ID, "usePlayerStats");
-        console.log(
-          `${ANewFoe.ID} | Use player stats setting:`,
-          usePlayerStats
-        );
-
         const requireApproval = game.settings.get(
           ANewFoe.ID,
           "requireGMApproval"
         );
+
         if (requireApproval && !game.user.isGM) {
-          // Send a request to the GM for approval
+          // Send request to GM and wait for approval
           game.socket.emit(`module.${ANewFoe.ID}`, {
             type: "requestStatRoll",
             userId: game.user.id,
@@ -268,66 +260,21 @@ class MonsterInfoDisplay extends Application {
             dc: dc,
             usePlayerStats: usePlayerStats,
           });
+          // Mark request as pending after sending to GM
+          ANewFoe.addPendingRequest(game.user.id, this.actor.id, key);
           ui.notifications.info(
             "Your request to discover the stat has been sent to the GM for approval."
           );
           return;
         }
 
-        if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
-          // Changed to static call
-          const modifier = await this.getPlayerModifier(key);
-          if (modifier !== 0) {
-            rollFormula = `1d20 + ${modifier}`;
-          }
-          console.log(
-            `${ANewFoe.ID} | Roll formula with modifier: ${rollFormula}`
-          );
-        }
-
-        const roll = new Roll(rollFormula);
-        await roll.evaluate();
-
-        console.log(`${ANewFoe.ID} | Roll result:`, {
-          formula: roll.formula,
-          total: roll.total,
+        // If no approval needed or is GM, process roll immediately
+        await this.processApprovedStatRoll({
+          key: key,
           dc: dc,
+          usePlayerStats: usePlayerStats,
+          actorId: this.actor.id,
         });
-
-        let rollMessage = `Attempting to discern ${key.toUpperCase()}...`;
-        if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
-          rollMessage += ` (${key.toUpperCase()} Check with ${roll.formula})`;
-        }
-
-        await ChatMessage.create({
-          flavor: rollMessage,
-          speaker: ChatMessage.getSpeaker(),
-          rolls: [roll],
-          sound: CONFIG.sounds.dice,
-        });
-
-        if (roll.total >= dc) {
-          const socketData = {
-            type: "revealStat",
-            userId: game.user.id,
-            actorId: this.token.document.getFlag(ANewFoe.ID, "actorId"),
-            key: key,
-          };
-
-          console.log(
-            `${ANewFoe.ID} | Roll succeeded (${roll.total}), sending:`,
-            socketData
-          );
-          game.socket.emit(`module.${ANewFoe.ID}`, socketData);
-        } else {
-          console.log(`${ANewFoe.ID} | Roll failed (${roll.total})`);
-          ChatMessage.create({
-            content: `Failed to discern the creature's ${key.toUpperCase()}.`,
-            speaker: ChatMessage.getSpeaker(),
-          });
-          // Remove the pending request when the roll fails
-          ANewFoe.removePendingRequest(game.user.id, this.actor.id, key);
-        }
       } catch (error) {
         console.error(`${ANewFoe.ID} | Error in stat roll:`, error);
       }
@@ -382,45 +329,55 @@ class MonsterInfoDisplay extends Application {
   }
 
   async processApprovedStatRoll(data) {
-    const key = data.key;
-    const dc = data.dc;
-    const usePlayerStats = data.usePlayerStats;
-    let rollFormula = "1d20";
+    try {
+      const key = data.key;
+      const dc = parseInt(data.dc);
+      const usePlayerStats = data.usePlayerStats;
+      const actorId = data.actorId;
 
-    if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
-      const modifier = await this.getPlayerModifier(key);
-      if (modifier !== 0) {
-        rollFormula += modifier >= 0 ? `+${modifier}` : `${modifier}`;
+      // Remove the pending request after processing the roll
+      ANewFoe.removePendingRequest(game.user.id, actorId, key);
+
+      let rollFormula = "1d20";
+      if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
+        const modifier = await this.getPlayerModifier(key);
+        rollFormula += `${modifier >= 0 ? "+" : ""}${modifier}`;
       }
-    }
 
-    const roll = new Roll(rollFormula);
-    await roll.evaluate();
+      // Create and evaluate roll
+      const roll = new Roll(rollFormula);
+      await roll.evaluate(); // Use async evaluate instead of evaluateSync
 
-    let rollMessage = `Attempting to discern ${key.toUpperCase()}...`;
-    if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
-      rollMessage += ` (${key.toUpperCase()} Check with ${roll.formula})`;
-    }
+      let rollMessage = `Attempting to discern ${key.toUpperCase()}...`;
+      if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
+        rollMessage += ` (${key.toUpperCase()} Check with ${roll.formula})`;
+      }
 
-    await ChatMessage.create({
-      flavor: rollMessage,
-      speaker: ChatMessage.getSpeaker(),
-      rolls: [roll],
-      sound: CONFIG.sounds.dice,
-    });
-
-    if (roll.total >= dc) {
-      // Send message to GM to reveal the stat
-      game.socket.emit(`module.${ANewFoe.ID}`, {
-        type: "revealStat",
-        userId: game.user.id,
-        actorId: data.actorId,
-        key: key,
+      await ChatMessage.create({
+        flavor: rollMessage,
+        speaker: ChatMessage.getSpeaker(),
+        rolls: [roll],
+        type: CONST.CHAT_MESSAGE_TYPES.ROLL,
+        sound: CONFIG.sounds.dice,
       });
-    } else {
-      ui.notifications.info("The check failed to reveal the stat.");
-      // Remove the pending request when the roll fails
-      ANewFoe.removePendingRequest(game.user.id, data.actorId, key);
+
+      if (roll.total >= dc) {
+        // Send message to GM to reveal the stat
+        game.socket.emit(`module.${ANewFoe.ID}`, {
+          type: "revealStat",
+          userId: game.user.id,
+          actorId: actorId,
+          key: key,
+        });
+      } else {
+        ui.notifications.info("The check failed to reveal the stat.");
+      }
+    } catch (error) {
+      console.error(
+        `${ANewFoe.ID} | Error processing approved stat roll:`,
+        error
+      );
+      ui.notifications.error("There was an error processing the roll.");
     }
   }
 }
@@ -457,13 +414,53 @@ class ANewFoe {
     this.registerHooks();
     this.setupSocket();
 
+    // Load pending requests from settings
+    this.loadPendingRequests();
+
+    // If player, check with GM for pending requests
+    if (!game.user.isGM) {
+      this.syncPendingRequestsWithGM();
+    }
+
     // Create GM UI immediately if user is GM
     if (game.user.isGM) {
       console.log(`${this.ID} | Creating initial GM UI`);
       this.createGMApprovalUI();
+      this.updateGMApprovalUI(); // Add this line to populate the UI on initialization
     }
 
     console.log(`${this.ID} | Module initialization complete`);
+  }
+
+  static syncPendingRequestsWithGM() {
+    console.log(`${this.ID} | Player requesting pending requests sync`);
+    // Add a slight delay to ensure socket is ready
+    setTimeout(() => {
+      game.socket.emit(`module.${this.ID}`, {
+        type: "requestPendingSync",
+        userId: game.user.id,
+      });
+    }, 500);
+  }
+
+  static loadPendingRequests() {
+    const storedRequests = game.settings.get(this.ID, "pendingRequests") || [];
+    this.PENDING_REQUESTS = storedRequests;
+    console.log(
+      `${this.ID} | Loaded pending requests from settings`,
+      this.PENDING_REQUESTS
+    );
+    this.updateGMApprovalUI();
+  }
+
+  static savePendingRequests() {
+    if (game.user.isGM) {
+      game.settings.set(this.ID, "pendingRequests", this.PENDING_REQUESTS);
+      console.log(
+        `${this.ID} | Saved pending requests to settings`,
+        this.PENDING_REQUESTS
+      );
+    }
   }
 
   static setupSocket() {
@@ -471,7 +468,7 @@ class ANewFoe {
     console.log(`${this.ID} | Setting up socket on ${socketName}`);
 
     // Remove any existing listeners to prevent duplicates
-    game.socket.off(socketName);
+    game.socket.off(socketName); // Ensure old listeners are removed
 
     game.socket.on(socketName, async (data, ack) => {
       console.log(`${this.ID} | Socket message received:`, data);
@@ -514,13 +511,81 @@ class ANewFoe {
           }
           break;
         case "requestStatRoll":
-          await this.handleStatRollRequest(data);
+          if (game.user.isGM) {
+            await this.handleStatRollRequest(data);
+          }
           break;
         case "statRollApproved":
-          await this.handleStatRollApproved(data);
+          if (game.user.id === data.userId) {
+            // Process the roll directly instead of requiring display instance
+            await this.processStatRoll(data);
+          }
+          break;
+        case "processApprovedStatRoll":
+          if (game.user.id === data.userId) {
+            const display = MonsterInfoDisplay.instance;
+            if (display) {
+              await display.processApprovedStatRoll(data);
+            }
+          }
           break;
         case "statRollRejected":
-          await this.handleStatRollRejected(data);
+          // ...existing code...
+          if (game.user.id === data.userId) {
+            // Remove the pending request when rejected
+            ANewFoe.removePendingRequest(data.userId, data.actorId, data.key);
+            ui.notifications.info("Your request was rejected by the GM.");
+          }
+          if (game.user.isGM) {
+            // Remove pending request and update UI
+            this.removePendingRequest(data.userId, data.actorId, data.key);
+          }
+          break;
+        case "addPendingRequest":
+          if (game.user.isGM) {
+            this.addPendingRequest(data.userId, data.actorId, data.statKey);
+          }
+          break;
+        case "removePendingRequest":
+          if (game.user.isGM) {
+            this.removePendingRequest(data.userId, data.actorId, data.statKey);
+          }
+          break;
+        case "requestPendingSync":
+          if (game.user.isGM) {
+            const playerRequests = this.PENDING_REQUESTS.filter(
+              (req) => req.userId === data.userId
+            );
+            if (playerRequests.length > 0) {
+              console.log(
+                `${this.ID} | Sending pending requests to player:`,
+                playerRequests
+              );
+              game.socket.emit(`module.${this.ID}`, {
+                type: "pendingRequestsSync",
+                userId: data.userId,
+                requests: playerRequests,
+              });
+            }
+          }
+          break;
+
+        case "pendingRequestsSync":
+          if (game.user.id === data.userId && data.requests) {
+            console.log(
+              `${this.ID} | Processing pending requests sync:`,
+              data.requests
+            );
+            // Only update requests for the current player
+            this.PENDING_REQUESTS = data.requests.filter(
+              (req) => req.userId === game.user.id
+            );
+
+            // If we have any pending requests, update the display
+            if (MonsterInfoDisplay.instance) {
+              await MonsterInfoDisplay.instance.refresh();
+            }
+          }
           break;
       }
     } catch (error) {
@@ -642,6 +707,9 @@ class ANewFoe {
       usePlayerStats: data.usePlayerStats,
     });
 
+    // Save pending requests
+    this.savePendingRequests();
+
     // Update the queue UI
     this.updateGMApprovalUI();
   }
@@ -666,50 +734,76 @@ class ANewFoe {
   }
 
   static addPendingRequest(userId, actorId, statKey) {
-    try {
-      this.PENDING_REQUESTS.push({ userId, actorId, statKey });
-      console.log(`${this.ID} | Added pending request`, {
+    if (game.user.isGM) {
+      // Prevent duplicate requests
+      const exists = this.PENDING_REQUESTS.some(
+        (req) =>
+          req.userId === userId &&
+          req.actorId === actorId &&
+          req.statKey === statKey
+      );
+      if (!exists) {
+        this.PENDING_REQUESTS.push({ userId, actorId, statKey });
+        this.savePendingRequests();
+        this.updateGMApprovalUI();
+
+        // Notify the specific player about their pending request
+        game.socket.emit(`module.${this.ID}`, {
+          type: "pendingRequestsSync",
+          userId: userId,
+          requests: this.PENDING_REQUESTS.filter(
+            (req) => req.userId === userId
+          ),
+        });
+      }
+    } else {
+      // Player sends a socket message to GM to add the pending request
+      game.socket.emit(`module.${this.ID}`, {
+        type: "addPendingRequest",
         userId,
         actorId,
         statKey,
       });
-
-      if (game.user.isGM) {
-        requestAnimationFrame(() => {
-          if (
-            !this.gmApprovalUI ||
-            !document.body.contains(this.gmApprovalUI)
-          ) {
-            console.log(`${this.ID} | Creating new GM UI for pending request`);
-            this.createGMApprovalUI();
-          }
-          this.updateGMApprovalUI();
-        });
-      }
-    } catch (error) {
-      console.error(`${this.ID} | Error adding pending request:`, error);
     }
   }
 
   static removePendingRequest(userId, actorId, statKey) {
-    this.PENDING_REQUESTS = this.PENDING_REQUESTS.filter(
-      (req) =>
-        !(
-          req.userId === userId &&
-          req.actorId === actorId &&
-          req.statKey === statKey
-        )
-    );
-    console.log(`${this.ID} | Removed pending request`, {
-      userId,
-      actorId,
-      statKey,
-    });
-    this.updateGMApprovalUI();
+    if (game.user.isGM) {
+      // Remove the request and update the UI
+      const initialLength = this.PENDING_REQUESTS.length;
+      this.PENDING_REQUESTS = this.PENDING_REQUESTS.filter(
+        (req) =>
+          !(
+            req.userId === userId &&
+            req.actorId === actorId &&
+            req.statKey === statKey
+          )
+      );
+      if (this.PENDING_REQUESTS.length !== initialLength) {
+        console.log(`${this.ID} | Removed pending request`, {
+          userId,
+          actorId,
+          statKey,
+        });
+        this.savePendingRequests();
+        this.updateGMApprovalUI();
+      }
+    } else {
+      // Player sends a socket message to GM to remove the pending request
+      game.socket.emit(`module.${this.ID}`, {
+        type: "removePendingRequest",
+        userId,
+        actorId,
+        statKey,
+      });
+    }
   }
 
   static isRequestPending(userId, actorId, statKey) {
-    return this.PENDING_REQUESTS.some(
+    // Players read the pending requests from settings
+    const pendingRequests = game.settings.get(this.ID, "pendingRequests") || [];
+
+    return pendingRequests.some(
       (req) =>
         req.userId === userId &&
         req.actorId === actorId &&
@@ -813,22 +907,17 @@ class ANewFoe {
   }
 
   static handleApproval(req) {
-    const data = {
+    // Send approval directly to the player
+    game.socket.emit(`module.${this.ID}`, {
+      type: "statRollApproved",
       userId: req.userId,
       actorId: req.actorId,
-      tokenId: req.tokenId,
       key: req.statKey,
       dc: req.dc,
       usePlayerStats: req.usePlayerStats,
-    };
-
-    // Send approval message
-    game.socket.emit(`module.${this.ID}`, {
-      type: "statRollApproved",
-      ...data,
     });
 
-    // Remove pending request and update UI
+    // Remove the request from pending
     this.removePendingRequest(req.userId, req.actorId, req.statKey);
   }
 
@@ -939,6 +1028,15 @@ class ANewFoe {
       config: true,
       type: Boolean,
       default: true,
+    });
+
+    // Register setting to store pending requests
+    game.settings.register(this.ID, "pendingRequests", {
+      name: "Pending Requests",
+      scope: "world",
+      config: false,
+      type: Array,
+      default: [],
     });
   }
 
@@ -1783,11 +1881,75 @@ class ANewFoe {
       return false;
     }
   }
+
+  static async processStatRoll(data) {
+    try {
+      const key = data.key;
+      const dc = parseInt(data.dc);
+      const usePlayerStats = data.usePlayerStats;
+      const actorId = data.actorId;
+
+      // Remove the pending request
+      this.removePendingRequest(game.user.id, actorId, key);
+
+      let rollFormula = "1d20";
+      if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
+        const actor = game.user.character;
+        if (actor) {
+          const modifier = actor.system.abilities[key].mod;
+          rollFormula += `${modifier >= 0 ? "+" : ""}${modifier}`;
+        }
+      }
+
+      const roll = new Roll(rollFormula);
+      await roll.evaluate();
+
+      let rollMessage = `Attempting to discern ${key.toUpperCase()}...`;
+      if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
+        rollMessage += ` (${key.toUpperCase()} Check with ${roll.formula})`;
+      }
+
+      await ChatMessage.create({
+        flavor: rollMessage,
+        speaker: ChatMessage.getSpeaker(),
+        rolls: [roll],
+        type: CONST.CHAT_MESSAGE_TYPES.ROLL,
+        sound: CONFIG.sounds.dice,
+      });
+
+      if (roll.total >= dc) {
+        game.socket.emit(`module.${this.ID}`, {
+          type: "revealStat",
+          userId: game.user.id,
+          actorId: actorId,
+          key: key,
+        });
+      } else {
+        ui.notifications.info("The check failed to reveal the stat.");
+      }
+
+      // If display exists, refresh it
+      if (MonsterInfoDisplay.instance) {
+        await MonsterInfoDisplay.instance.refresh();
+      }
+    } catch (error) {
+      console.error(`${this.ID} | Error processing stat roll:`, error);
+      ui.notifications.error("There was an error processing the roll.");
+    }
+  }
 }
 
-// Module Initialization
+// Adjust the module initialization
 Hooks.once("init", () => {
   CONFIG.debug.hooks = true;
   console.log(`${ANewFoe.ID} | Initializing module`);
+  // Remove ANewFoe.initialize() from here
+  // ...existing code...
+});
+
+// Move the initialization to the 'ready' hook
+Hooks.once("ready", () => {
+  console.log(`${ANewFoe.ID} | Module ready as ${game.user.name}`);
   ANewFoe.initialize();
+  // ...existing code...
 });
