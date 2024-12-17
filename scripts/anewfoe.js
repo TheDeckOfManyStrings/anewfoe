@@ -1768,25 +1768,27 @@ class ANewFoe {
     if (!game.user.isGM || !token?.document?.flags) return;
 
     try {
-      // Clean up existing overlay safely
+      // Clean up existing overlay
       if (token.revealOverlay) {
         if (
           token.revealOverlay.destroy &&
           typeof token.revealOverlay.destroy === "function"
         ) {
           token.revealOverlay.destroy({ children: true });
-        } else {
-          token.removeChild(token.revealOverlay);
         }
+        token.removeChild(token.revealOverlay);
         token.revealOverlay = null;
       }
 
-      const players = game.users.filter((u) => !u.isGM);
+      // Get non-GM players
+      const players = game.users.filter((u) => !u.isGM && u.active);
       if (players.length === 0) return;
+
+      const actorId = token.document.getFlag(this.ID, "actorId");
+      if (!actorId) return;
 
       // Calculate how many players know this monster
       const knownCount = players.reduce((count, player) => {
-        const actorId = token.document.getFlag(this.ID, "actorId");
         const learnedMonsters =
           game.settings.get(this.ID, "learnedMonsters") || {};
         const revealedTo =
@@ -1795,25 +1797,31 @@ class ANewFoe {
         const knows =
           learnedMonsters[player.id]?.includes(actorId) ||
           revealedTo.includes(player.id);
-
         return count + (knows ? 1 : 0);
       }, 0);
 
-      if (knownCount >= players.length) return; // All players know it
-
       // Create new overlay
-      const overlay = new PIXI.Graphics();
-      const color = knownCount === 0 ? 0xff0000 : 0xffa500;
+      const overlay = new PIXI.Container();
 
-      overlay.lineStyle(3, color, 0.8);
-      overlay.drawRoundedRect(0, 0, token.w, token.h, 5);
-
+      // Draw the indicator circle
+      const graphics = new PIXI.Graphics();
       const radius = Math.min(token.w, token.h) * 0.15;
-      overlay.beginFill(color, 0.8);
-      overlay.drawCircle(radius, radius, radius);
-      overlay.endFill();
+      const color =
+        knownCount === 0
+          ? 0xff0000
+          : knownCount < players.length
+          ? 0xffa500
+          : 0x00ff00;
 
-      if (knownCount > 0) {
+      graphics.lineStyle(2, 0x000000, 1);
+      graphics.beginFill(color, 0.8);
+      graphics.drawCircle(radius, radius, radius);
+      graphics.endFill();
+
+      overlay.addChild(graphics);
+
+      // Add count text if some but not all players know
+      if (knownCount > 0 && knownCount < players.length) {
         const text = new PIXI.Text(knownCount.toString(), {
           fontSize: radius * 1.5,
           fill: "white",
@@ -1824,9 +1832,14 @@ class ANewFoe {
         overlay.addChild(text);
       }
 
+      // Add overlay to token
       token.addChild(overlay);
       token.revealOverlay = overlay;
       overlay.zIndex = 999;
+
+      // Force token to sort its children
+      token.sortableChildren = true;
+      token.sortChildren();
     } catch (error) {
       console.error(`${this.ID} | Error updating token overlay:`, error);
     }
