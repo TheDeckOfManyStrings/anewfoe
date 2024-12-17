@@ -1,3 +1,40 @@
+class DCModifiersConfig extends FormApplication {
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      title: "DC Modifiers Configuration",
+      id: "dc-modifiers-config",
+      template: `modules/anewfoe/templates/dc-modifiers-config.html`,
+      width: 400,
+      height: "auto",
+      closeOnSubmit: true,
+    });
+  }
+
+  getData(options) {
+    const modifiers = game.settings.get("anewfoe", "dcModifiers");
+    return {
+      modifiers: Object.entries(modifiers).map(([key, value]) => ({
+        key,
+        value,
+        label: key.toUpperCase(),
+      })),
+    };
+  }
+
+  async _updateObject(event, formData) {
+    const modifiers = {};
+    for (let [key, value] of Object.entries(formData)) {
+      if (key.startsWith("modifier-")) {
+        modifiers[key.replace("modifier-", "")] = Number(value);
+      }
+    }
+    await game.settings.set("anewfoe", "dcModifiers", modifiers);
+  }
+}
+
+// Import the DCModifiersConfig class
+// import { DCModifiersConfig } from "./dc-modifiers-config.js";
+
 class MonsterInfoDisplay extends Application {
   static instance = null;
 
@@ -11,7 +48,7 @@ class MonsterInfoDisplay extends Application {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: "monster-info-display",
-      template: `modules/${ANewFoe.ID}/templates/monster-info.html`,
+      template: `modules/anewfoe/templates/monster-info.html`,
       title: "Monster Info",
       width: 240,
       height: 420,
@@ -61,6 +98,9 @@ class MonsterInfoDisplay extends Application {
           key: "hp",
           revealed: playerStats.includes("hp"),
           dc: dcValues["hp"],
+          totalDC:
+            dcValues["hp"] +
+            (game.settings.get("anewfoe", "dcModifiers").hp || 0),
         },
         {
           label: "Armor Class",
@@ -68,6 +108,9 @@ class MonsterInfoDisplay extends Application {
           key: "ac",
           revealed: playerStats.includes("ac"),
           dc: dcValues["ac"],
+          totalDC:
+            dcValues["ac"] +
+            (game.settings.get("anewfoe", "dcModifiers").ac || 0),
         },
         {
           label: "Speed",
@@ -75,6 +118,9 @@ class MonsterInfoDisplay extends Application {
           key: "speed",
           revealed: playerStats.includes("speed"),
           dc: dcValues["speed"],
+          totalDC:
+            dcValues["speed"] +
+            (game.settings.get("anewfoe", "dcModifiers").speed || 0),
         },
         {
           label: "Strength",
@@ -84,6 +130,9 @@ class MonsterInfoDisplay extends Application {
           key: "str",
           revealed: playerStats.includes("str"),
           dc: dcValues["str"],
+          totalDC:
+            dcValues["str"] +
+            (game.settings.get("anewfoe", "dcModifiers").str || 0),
         },
         {
           label: "Dexterity",
@@ -93,6 +142,9 @@ class MonsterInfoDisplay extends Application {
           key: "dex",
           revealed: playerStats.includes("dex"),
           dc: dcValues["dex"],
+          totalDC:
+            dcValues["dex"] +
+            (game.settings.get("anewfoe", "dcModifiers").dex || 0),
         },
         {
           label: "Constitution",
@@ -102,6 +154,9 @@ class MonsterInfoDisplay extends Application {
           key: "con",
           revealed: playerStats.includes("con"),
           dc: dcValues["con"],
+          totalDC:
+            dcValues["con"] +
+            (game.settings.get("anewfoe", "dcModifiers").con || 0),
         },
         {
           label: "Intelligence",
@@ -111,6 +166,9 @@ class MonsterInfoDisplay extends Application {
           key: "int",
           revealed: playerStats.includes("int"),
           dc: dcValues["int"],
+          totalDC:
+            dcValues["int"] +
+            (game.settings.get("anewfoe", "dcModifiers").int || 0),
         },
         {
           label: "Wisdom",
@@ -120,6 +178,9 @@ class MonsterInfoDisplay extends Application {
           key: "wis",
           revealed: playerStats.includes("wis"),
           dc: dcValues["wis"],
+          totalDC:
+            dcValues["wis"] +
+            (game.settings.get("anewfoe", "dcModifiers").wis || 0),
         },
         {
           label: "Charisma",
@@ -129,6 +190,9 @@ class MonsterInfoDisplay extends Application {
           key: "cha",
           revealed: playerStats.includes("cha"),
           dc: dcValues["cha"],
+          totalDC:
+            dcValues["cha"] +
+            (game.settings.get("anewfoe", "dcModifiers").cha || 0),
         },
       ],
     };
@@ -140,6 +204,7 @@ class MonsterInfoDisplay extends Application {
 
   _calculateDCs() {
     const method = game.settings.get(ANewFoe.ID, "dcCalculationMethod");
+    const modifiers = game.settings.get(ANewFoe.ID, "dcModifiers");
     const defaultDCs = {
       hp: 12,
       ac: 12,
@@ -154,24 +219,33 @@ class MonsterInfoDisplay extends Application {
     const dcValues = {};
 
     switch (method) {
-      case "standardArray":
-        return defaultDCs;
       case "fixedValue":
         const fixedDC = game.settings.get(ANewFoe.ID, "fixedDCValue") || 15;
         for (const key in defaultDCs) {
-          dcValues[key] = fixedDC;
+          dcValues[key] = Math.max(1, fixedDC + (modifiers[key] || 0));
         }
-        return dcValues;
+        break;
       case "challengeRatingScaling":
         const cr = this.actor.system.details.cr || 0;
         const scaledDC = this._calculateCRBasedDC(cr);
         for (const key in defaultDCs) {
-          dcValues[key] = scaledDC;
+          dcValues[key] = Math.max(1, scaledDC + (modifiers[key] || 0));
         }
-        return dcValues;
+        break;
       default:
         return defaultDCs;
     }
+
+    // Apply GM-specific adjustments
+    const gmAdjustments =
+      game.settings.get(ANewFoe.ID, "gmDCAdjustments") || {};
+    for (const key in dcValues) {
+      if (gmAdjustments[key] !== undefined) {
+        dcValues[key] += gmAdjustments[key];
+      }
+    }
+
+    return dcValues;
   }
 
   _calculateCRBasedDC(cr) {
@@ -1059,18 +1133,45 @@ class ANewFoe {
       scope: "world",
     });
 
+    game.settings.register(this.ID, "dcModifiers", {
+      name: "DC Modifiers",
+      scope: "world",
+      config: false,
+      type: Object,
+      default: {
+        hp: 0,
+        ac: 0,
+        speed: 0,
+        str: 0,
+        dex: 0,
+        con: 0,
+        int: 0,
+        wis: 0,
+        cha: 0,
+      },
+    });
+
     game.settings.register(this.ID, "dcCalculationMethod", {
       name: "DC Calculation Method",
       hint: "Choose how the DCs for stat checks are calculated.",
       scope: "world",
       type: String,
       choices: {
-        standardArray: "Standard Array",
         fixedValue: "Fixed DC",
         challengeRatingScaling: "Scaling DC based on Challenge Rating",
       },
       default: "challengeRatingScaling",
       config: true,
+    });
+
+    // Register the submenu
+    game.settings.registerMenu(this.ID, "dcModifiersMenu", {
+      name: "DC Modifiers",
+      label: "Modify DC Values",
+      hint: "Adjust the difficulty modifiers for each stat",
+      icon: "fas fa-sliders-h",
+      type: DCModifiersConfig,
+      restricted: true,
     });
 
     // If "fixedValue" is selected, provide an input for the fixed DC
@@ -1124,6 +1225,24 @@ class ANewFoe {
       },
       config: true,
       scope: "world",
+    });
+
+    game.settings.register(this.ID, "gmDCAdjustments", {
+      name: "GM DC Adjustments",
+      scope: "world",
+      config: false,
+      type: Object,
+      default: {
+        hp: 0,
+        ac: 0,
+        speed: 0,
+        str: 0,
+        dex: 0,
+        con: 0,
+        int: 0,
+        wis: 0,
+        cha: 0,
+      },
     });
   }
 
