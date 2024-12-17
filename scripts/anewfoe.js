@@ -408,6 +408,9 @@ class ANewFoe {
 
   static PENDING_REQUESTS = [];
 
+  // Add new properties after other static properties
+  static TIMEOUTS = new Map();
+
   static initialize() {
     console.log(`${this.ID} | Starting module initialization`);
     this.registerSettings();
@@ -712,6 +715,45 @@ class ANewFoe {
 
     // Update the queue UI
     this.updateGMApprovalUI();
+
+    // Set up auto-reject timer if enabled
+    if (game.settings.get(this.ID, "enableAutoReject")) {
+      const timeoutMinutes = game.settings.get(this.ID, "autoRejectTimer");
+      const timeoutMs = timeoutMinutes * 60 * 1000;
+      const timeoutKey = `${data.userId}-${data.actorId}-${data.key}`;
+
+      // Clear any existing timeout for this request
+      if (this.TIMEOUTS.has(timeoutKey)) {
+        clearTimeout(this.TIMEOUTS.get(timeoutKey));
+      }
+
+      // Set new timeout
+      const timeout = setTimeout(() => {
+        // Check if request still exists before auto-rejecting
+        if (
+          this.PENDING_REQUESTS.some(
+            (req) =>
+              req.userId === data.userId &&
+              req.actorId === data.actorId &&
+              req.statKey === data.key
+          )
+        ) {
+          console.log(
+            `${this.ID} | Auto-rejecting request after ${timeoutMinutes} minutes:`,
+            timeoutKey
+          );
+          this.handleRejection({
+            userId: data.userId,
+            actorId: data.actorId,
+            statKey: data.key,
+            tokenId: data.tokenId,
+          });
+          this.TIMEOUTS.delete(timeoutKey);
+        }
+      }, timeoutMs);
+
+      this.TIMEOUTS.set(timeoutKey, timeout);
+    }
   }
 
   static async handleStatRollApproved(data) {
@@ -769,6 +811,13 @@ class ANewFoe {
 
   static removePendingRequest(userId, actorId, statKey) {
     if (game.user.isGM) {
+      // Clear auto-reject timeout if it exists
+      const timeoutKey = `${userId}-${actorId}-${statKey}`;
+      if (this.TIMEOUTS.has(timeoutKey)) {
+        clearTimeout(this.TIMEOUTS.get(timeoutKey));
+        this.TIMEOUTS.delete(timeoutKey);
+      }
+
       // Remove the request and update the UI
       const initialLength = this.PENDING_REQUESTS.length;
       this.PENDING_REQUESTS = this.PENDING_REQUESTS.filter(
@@ -907,6 +956,13 @@ class ANewFoe {
   }
 
   static handleApproval(req) {
+    // Clear auto-reject timeout if it exists
+    const timeoutKey = `${req.userId}-${req.actorId}-${req.statKey}`;
+    if (this.TIMEOUTS.has(timeoutKey)) {
+      clearTimeout(this.TIMEOUTS.get(timeoutKey));
+      this.TIMEOUTS.delete(timeoutKey);
+    }
+
     // Send approval directly to the player
     game.socket.emit(`module.${this.ID}`, {
       type: "statRollApproved",
@@ -922,6 +978,13 @@ class ANewFoe {
   }
 
   static handleRejection(req) {
+    // Clear auto-reject timeout if it exists
+    const timeoutKey = `${req.userId}-${req.actorId}-${req.statKey}`;
+    if (this.TIMEOUTS.has(timeoutKey)) {
+      clearTimeout(this.TIMEOUTS.get(timeoutKey));
+      this.TIMEOUTS.delete(timeoutKey);
+    }
+
     // Send rejection message
     game.socket.emit(`module.${this.ID}`, {
       type: "statRollRejected",
@@ -1037,6 +1100,30 @@ class ANewFoe {
       config: false,
       type: Array,
       default: [],
+    });
+
+    // Add new settings for auto-reject
+    game.settings.register(this.ID, "enableAutoReject", {
+      name: "Enable Auto-Reject",
+      hint: "Automatically reject stat check requests after a specified time",
+      type: Boolean,
+      default: false,
+      config: true,
+      scope: "world",
+    });
+
+    game.settings.register(this.ID, "autoRejectTimer", {
+      name: "Auto-Reject Timer (minutes)",
+      hint: "How long to wait before auto-rejecting requests (in minutes)",
+      type: Number,
+      default: 5,
+      range: {
+        min: 1,
+        max: 60,
+        step: 1,
+      },
+      config: true,
+      scope: "world",
     });
   }
 
