@@ -1329,11 +1329,15 @@ class ANewFoe {
         }
       } else {
         // GM-side overlay updates
-        canvas.tokens.placeables.forEach((token) => {
+        console.log(`${this.ID} | Canvas ready for GM, updating overlays`);
+        for (const token of canvas.tokens.placeables) {
           if (token?.document?.flags) {
-            ANewFoe.updateTokenOverlay(token);
+            // Add a small delay to ensure token is fully initialized
+            setTimeout(() => {
+              this.updateTokenOverlay(token);
+            }, 100);
           }
-        });
+        }
       }
     });
 
@@ -1363,6 +1367,11 @@ class ANewFoe {
           // Restore token visibility
           token.alpha = 1;
         }
+      } else if (token?.document?.flags) {
+        // Ensure GM overlays are maintained
+        setTimeout(() => {
+          this.updateTokenOverlay(token);
+        }, 100);
       }
     });
 
@@ -1805,7 +1814,7 @@ class ANewFoe {
 
       // Draw the indicator circle
       const graphics = new PIXI.Graphics();
-      const radius = Math.min(token.w, token.h) * 0.15;
+      const radius = Math.min(token.w, token.h) * 0.05;
       const color =
         knownCount === 0
           ? 0xff0000
@@ -1813,8 +1822,8 @@ class ANewFoe {
           ? 0xffa500
           : 0x00ff00;
 
-      graphics.lineStyle(2, 0x000000, 1);
-      graphics.beginFill(color, 0.8);
+      graphics.lineStyle(1, 0x000000, 1);
+      graphics.beginFill(color, 0.5);
       graphics.drawCircle(radius, radius, radius);
       graphics.endFill();
 
