@@ -262,3 +262,24 @@
 .reveal-monster-window .header-button {
   color: #fff;
 }
+
+#bulk-upload-save {
+  border: 1px solid #000;
+
+  color: green;
+  cursor: pointer;
+  margin: 0 4px;
+  padding: 4px;
+  margin-bottom: 20px;
+}
+
+#wipe-known-monsters {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #000;
+
+  color: red;
+  cursor: pointer;
+  margin: 0 4px;
+  padding: 4px;
+  margin-top: 20px;
+}

@@ -123,6 +123,17 @@ class BulkUploadConfig extends FormApplication {
     await game.settings.set("anewfoe", "learnedMonsters", learnedMonsters);
   }
 
+  async _wipeKnownMonsters(playerId) {
+    const learnedMonsters = game.settings.get("anewfoe", "learnedMonsters") || {};
+    if (learnedMonsters[playerId]) {
+      delete learnedMonsters[playerId];
+      await game.settings.set("anewfoe", "learnedMonsters", learnedMonsters);
+      ui.notifications.info(`All known monsters have been wiped for the selected player.`);
+    } else {
+      ui.notifications.warn(`The selected player has no known monsters.`);
+    }
+  }
+
   activateListeners(html) {
     super.activateListeners(html);
 
@@ -136,6 +147,16 @@ class BulkUploadConfig extends FormApplication {
     html.find('textarea[name="jsonContent"]').change((ev) => {
       if (ev.target.value) {
         html.find('input[name="jsonFile"]').val("");
+      }
+    });
+
+    // Add listener for the wipe button
+    html.find('#wipe-known-monsters').click(async (ev) => {
+      const playerId = html.find('select[name="playerId"]').val();
+      if (playerId) {
+        await this._wipeKnownMonsters(playerId);
+      } else {
+        ui.notifications.warn("Please select a player to wipe known monsters.");
       }
     });
   }
