@@ -32,6 +32,115 @@ class DCModifiersConfig extends FormApplication {
   }
 }
 
+// Add this new class near the top of the file, after other class definitions
+class BulkUploadConfig extends FormApplication {
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      title: "Bulk Upload Monster Knowledge",
+      id: "bulk-upload-config",
+      template: "modules/anewfoe/templates/bulk-upload.html",
+      width: 500,
+      height: "auto",
+      closeOnSubmit: false,
+    });
+  }
+
+  getData(options) {
+    return {
+      players: game.users
+        .filter((u) => !u.isGM)
+        .map((u) => ({
+          id: u.id,
+          name: u.name,
+        })),
+    };
+  }
+
+  async _updateObject(event, formData) {
+    try {
+      const playerId = formData.playerId;
+      let monsterList = [];
+
+      // Handle file upload
+      if (event.target.jsonFile?.files?.length > 0) {
+        const file = event.target.jsonFile.files[0];
+        const text = await file.text();
+        monsterList = this._parseMonsterList(text);
+      }
+      // Handle pasted content
+      else if (formData.jsonContent) {
+        monsterList = this._parseMonsterList(formData.jsonContent);
+      }
+
+      if (monsterList.length === 0) {
+        ui.notifications.warn("No valid monster names found in the input.");
+        return;
+      }
+
+      await this._processMonsterList(playerId, monsterList);
+      const user = game.users.get(playerId);
+      ui.notifications.info(`Successfully processed ${monsterList.length} monsters for ${user.name}.`);
+      this.close();
+    } catch (error) {
+      console.error(`${ANewFoe.ID} | Error processing bulk upload:`, error);
+      ui.notifications.error("Error processing the upload. Check the console for details.");
+    }
+  }
+
+  _parseMonsterList(content) {
+    try {
+      const data = JSON.parse(content);
+      if (Array.isArray(data)) {
+        return data.filter(name => typeof name === 'string');
+      } else if (typeof data === 'object') {
+        return Object.entries(data)
+          .filter(([_, value]) => value === true)
+          .map(([key, _]) => key);
+      }
+      return [];
+    } catch (error) {
+      ui.notifications.error("Invalid JSON format");
+      throw error;
+    }
+  }
+
+  async _processMonsterList(playerId, monsterNames) {
+    const learnedMonsters =
+      game.settings.get("anewfoe", "learnedMonsters") || {};
+    learnedMonsters[playerId] = learnedMonsters[playerId] || [];
+
+    // Find matching actors
+    for (const name of monsterNames) {
+      const actor = game.actors.find(
+        (a) => a.type === "npc" && a.name.toLowerCase() === name.toLowerCase()
+      );
+
+      if (actor && !learnedMonsters[playerId].includes(actor.id)) {
+        learnedMonsters[playerId].push(actor.id);
+      }
+    }
+
+    await game.settings.set("anewfoe", "learnedMonsters", learnedMonsters);
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+
+    // Clear textarea when file is selected and vice versa
+    html.find('input[name="jsonFile"]').change((ev) => {
+      if (ev.target.value) {
+        html.find('textarea[name="jsonContent"]').val("");
+      }
+    });
+
+    html.find('textarea[name="jsonContent"]').change((ev) => {
+      if (ev.target.value) {
+        html.find('input[name="jsonFile"]').val("");
+      }
+    });
+  }
+}
+
 // Import the DCModifiersConfig class
 // import { DCModifiersConfig } from "./dc-modifiers-config.js";
 
@@ -1243,6 +1352,16 @@ class ANewFoe {
         wis: 0,
         cha: 0,
       },
+    });
+
+    // Add the bulk upload menu
+    game.settings.registerMenu(this.ID, "bulkUploadMenu", {
+      name: "Bulk Upload Monster Knowledge",
+      label: "Bulk Upload",
+      hint: "Upload a list of monster names to grant knowledge to a player",
+      icon: "fas fa-upload",
+      type: BulkUploadConfig,
+      restricted: true,
     });
   }
 
