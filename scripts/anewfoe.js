@@ -79,11 +79,15 @@ class BulkUploadConfig extends FormApplication {
 
       await this._processMonsterList(playerId, monsterList);
       const user = game.users.get(playerId);
-      ui.notifications.info(`Successfully processed ${monsterList.length} monsters for ${user.name}.`);
+      ui.notifications.info(
+        `Successfully processed ${monsterList.length} monsters for ${user.name}.`
+      );
       this.close();
     } catch (error) {
       console.error(`${ANewFoe.ID} | Error processing bulk upload:`, error);
-      ui.notifications.error("Error processing the upload. Check the console for details.");
+      ui.notifications.error(
+        "Error processing the upload. Check the console for details."
+      );
     }
   }
 
@@ -91,8 +95,8 @@ class BulkUploadConfig extends FormApplication {
     try {
       const data = JSON.parse(content);
       if (Array.isArray(data)) {
-        return data.filter(name => typeof name === 'string');
-      } else if (typeof data === 'object') {
+        return data.filter((name) => typeof name === "string");
+      } else if (typeof data === "object") {
         return Object.entries(data)
           .filter(([_, value]) => value === true)
           .map(([key, _]) => key);
@@ -124,11 +128,14 @@ class BulkUploadConfig extends FormApplication {
   }
 
   async _wipeKnownMonsters(playerId) {
-    const learnedMonsters = game.settings.get("anewfoe", "learnedMonsters") || {};
+    const learnedMonsters =
+      game.settings.get("anewfoe", "learnedMonsters") || {};
     if (learnedMonsters[playerId]) {
       delete learnedMonsters[playerId];
       await game.settings.set("anewfoe", "learnedMonsters", learnedMonsters);
-      ui.notifications.info(`All known monsters have been wiped for the selected player.`);
+      ui.notifications.info(
+        `All known monsters have been wiped for the selected player.`
+      );
     } else {
       ui.notifications.warn(`The selected player has no known monsters.`);
     }
@@ -151,7 +158,7 @@ class BulkUploadConfig extends FormApplication {
     });
 
     // Add listener for the wipe button
-    html.find('#wipe-known-monsters').click(async (ev) => {
+    html.find("#wipe-known-monsters").click(async (ev) => {
       const playerId = html.find('select[name="playerId"]').val();
       if (playerId) {
         await this._wipeKnownMonsters(playerId);
@@ -1710,12 +1717,66 @@ class ANewFoe {
 
       // Add click handler directly
       token.mouseInteractionManager.permissions.clickLeft = true;
-      token.mouseInteractionManager.callbacks = {
-        clickLeft: () => {
-          console.log(`${this.ID} | Token clicked:`, token.name);
-          ANewFoe.showTokenInfo(token);
-        },
+      token.mouseInteractionManager.callbacks.clickLeft = async (event) => {
+        console.log(`${this.ID} | Token clicked:`, token.name);
+
+        // Check if the user has observer or ownership permissions
+        const userPermissions = token.actor.permission;
+        const userId = game.user.id;
+        const userPermissionLevel =
+          userPermissions[userId] || userPermissions.default;
+
+        if (userPermissionLevel >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER) {
+          console.log(
+            `${this.ID} | User has observer or ownership permissions, skipping Monster Info UI`
+          );
+          return;
+        }
+
+        // Open Monster Info UI if the user doesn't have observer or ownership permissions
+        await ANewFoe.showTokenInfo(token);
       };
+
+      // Ensure right-click and double-click functionality is not blocked
+      token.mouseInteractionManager.permissions.clickRight = true;
+      token.mouseInteractionManager.permissions.clickLeft2 = true;
+    }
+
+    // Add event listener for double right-click to target the token
+    token.on("rightdown", (event) => {
+      if (event.data.originalEvent.detail === 2) {
+        token.setTarget(!token.isTargeted, { releaseOthers: false });
+      }
+    });
+  }
+
+  static async showTokenInfo(token) {
+    console.log(`${this.ID} | Attempting to show token info for:`, token.name);
+
+    if (!ANewFoe.isMonsterRevealed(token.document)) {
+      console.log(`${this.ID} | Token not revealed, skipping info display`);
+      return;
+    }
+
+    try {
+      // If same window exists, bring to front
+      if (MonsterInfoDisplay.instance?.token.id === token.id) {
+        MonsterInfoDisplay.instance.bringToTop();
+        return;
+      }
+
+      // Close any existing window
+      if (MonsterInfoDisplay.instance) {
+        await MonsterInfoDisplay.instance.close();
+        MonsterInfoDisplay.instance = null;
+      }
+
+      // Create and render new window
+      const display = new MonsterInfoDisplay(token);
+      await display.render(true);
+      console.log(`${this.ID} | Monster info display rendered`);
+    } catch (error) {
+      console.error(`${this.ID} | Error showing token info:`, error);
     }
   }
 

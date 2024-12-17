@@ -28,3 +28,10 @@
   <label>WARNING THIS WILL WIPE THE SELECTED PLAYERS KNOWN MONSTERS</label>
   <button type="button" id="wipe-known-monsters">Wipe Known Monsters</button>
 </form>
+
+<script>
+  document.getElementById('wipe-known-monsters').addEventListener('click', () => {
+    // Call the wipeKnownMonsters function from the script
+    ANewFoe.wipeKnownMonsters();
+  });
+</script>
