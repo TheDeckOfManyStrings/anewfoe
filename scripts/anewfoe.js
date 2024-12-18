@@ -572,13 +572,9 @@ class MonsterInfoDisplay extends Application {
         dc,
       });
 
-      let rollMessage = `Attempting to discern ${key.toUpperCase()}...`;
-      if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
-        rollMessage += ` (${key.toUpperCase()} Check with ${rollFormula})`;
-      }
-
+      // Send chat message for the roll
       await ChatMessage.create({
-        flavor: rollMessage,
+        flavor: `Attempting to discern ${key.toUpperCase()}...`,
         speaker: ChatMessage.getSpeaker(),
         rolls: [roll],
         type: CONST.CHAT_MESSAGE_TYPES.ROLL,
@@ -856,21 +852,6 @@ class ANewFoe {
 
       this.DEBOUNCE.lastReveal[messageKey] = now;
       console.log(`${this.ID} | Processing stat revealed for player`);
-
-      // Check if we've sent a chat message recently
-      if (
-        !this.DEBOUNCE.lastChat[messageKey] ||
-        now - this.DEBOUNCE.lastChat[messageKey] > this.DEBOUNCE.TIMEOUT
-      ) {
-        this.DEBOUNCE.lastChat[messageKey] = now;
-        // Only send chat message if we're the player who made the request
-        if (game.user.id === data.userId) {
-          await ChatMessage.create({
-            content: `Success! You've discovered the creature's ${data.key.toUpperCase()}!`,
-            speaker: ChatMessage.getSpeaker(),
-          });
-        }
-      }
 
       if (MonsterInfoDisplay.instance) {
         console.log(`${this.ID} | Refreshing display after stat reveal`);
