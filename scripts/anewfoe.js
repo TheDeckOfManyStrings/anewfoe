@@ -938,10 +938,12 @@ class ANewFoe {
 
     console.log(`${this.ID} | GM received stat roll request`, data);
 
-    // Ensure GM UI exists
-    if (!this.gmApprovalUI) {
+    // Ensure GM UI exists and is rendered
+    if (!GMQueueApplication.instance) {
       console.log(`${this.ID} | Creating GM UI for stat roll request`);
       this.createGMApprovalUI();
+    } else if (GMQueueApplication.instance._state !== RENDERED) {
+      GMQueueApplication.instance.render(true);
     }
 
     const user = game.users.get(data.userId);
@@ -966,6 +968,11 @@ class ANewFoe {
 
     // Update the queue UI
     this.updateGMApprovalUI();
+
+    // Show the GM queue window if it was closed
+    if (!GMQueueApplication.instance) {
+      this.createGMApprovalUI();
+    }
 
     // Set up auto-reject timer if enabled
     if (game.settings.get(this.ID, "enableAutoReject")) {
