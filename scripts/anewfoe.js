@@ -647,8 +647,8 @@ class ANewFoe {
       this.syncPendingRequestsWithGM();
     }
 
-    // Create GM UI immediately if user is GM
-    if (game.user.isGM) {
+    // Create GM UI immediately if user is GM and stat reveal is enabled
+    if (game.user.isGM && game.settings.get(this.ID, "enableStatReveal")) {
       console.log(`${this.ID} | Creating initial GM UI`);
       this.createGMApprovalUI();
       this.updateGMApprovalUI(); // Add this line to populate the UI on initialization
@@ -1145,6 +1145,26 @@ class ANewFoe {
       requiresReload: true,
     });
 
+    // Add new setting to control stat reveal feature
+    game.settings.register(this.ID, "enableStatReveal", {
+      name: "Enable Stat Reveal",
+      hint: "If enabled, players can reveal monster stats after the monster has been revealed.",
+      scope: "world",
+      config: true,
+      type: Boolean,
+      default: true,
+      onChange: (value) => {
+        if (game.user.isGM) {
+          if (value) {
+            ANewFoe.createGMApprovalUI();
+          } else if (GMQueueApplication.instance) {
+            GMQueueApplication.instance.close();
+          }
+        }
+      },
+      requiresReload: true,
+    });
+
     // State persistence settings
     game.settings.register(this.ID, "learnedMonsters", {
       name: "Learned Monsters",
@@ -1551,7 +1571,7 @@ class ANewFoe {
 
     Hooks.once("ready", () => {
       console.log(`${this.ID} | Module ready as ${game.user.name}`);
-      if (game.user.isGM && !this.gmApprovalUI) {
+      if (game.user.isGM && game.settings.get(this.ID, "enableStatReveal")) {
         console.log(`${this.ID} | Creating GM UI on ready`);
         this.createGMApprovalUI();
       }
@@ -1702,7 +1722,9 @@ class ANewFoe {
 
         // For all other permission levels, show our custom UI if revealed
         if (ANewFoe.isMonsterRevealed(token.document)) {
-          await ANewFoe.showTokenInfo(token);
+          if (game.settings.get(ANewFoe.ID, "enableStatReveal")) {
+            await ANewFoe.showTokenInfo(token);
+          }
         }
       };
 
