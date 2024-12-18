@@ -1,3 +1,7 @@
+// Define RENDERED and CLOSING manually if not available in foundry.applications.ApplicationState
+const RENDERED = 2;
+const CLOSING = 3;
+
 class DCModifiersConfig extends FormApplication {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
@@ -189,13 +193,11 @@ class MonsterInfoDisplay extends Application {
       title: "Monster Info",
       width: 240,
       height: 420,
-      maxWidth: 240,
-      maxHeight: 420,
       minimizable: true,
-      resizable: false,
+      resizable: true,
+      dragDrop: [],
       classes: ["monster-info-window"],
       popOut: true,
-      opacity: 0.5,
     });
   }
 
@@ -504,31 +506,26 @@ class MonsterInfoDisplay extends Application {
   }
 
   setPosition(options = {}) {
-    if (!this.element) return;
+    // Get saved position from settings
+    const savedPosition = game.settings.get(ANewFoe.ID, "monsterInfoPosition");
+    if (savedPosition) {
+      options = foundry.utils.mergeObject(savedPosition, options);
+    }
 
-    const sidebar = document.getElementById("sidebar");
-    if (!sidebar) return super.setPosition(options);
-
-    const sidebarWidth = sidebar.offsetWidth;
-    let savedPostion = game.settings.get(ANewFoe.ID, "infoDisplayPosition");
-    const position = savedPostion || {
-      left: window.innerWidth - sidebarWidth - this.options.width - 5,
-      top: window.innerHeight - this.options.height - 5,
-    };
-
-    // game.settings.set(ANewFoe.ID, "infoDisplayPosition", position);
-
-    return super.setPosition(foundry.utils.mergeObject(options, position));
+    // Call parent class setPosition
+    return super.setPosition(options);
   }
 
   async close(options = {}) {
+    // Save the current position before closing
+    if (this.position) {
+      await game.settings.set(ANewFoe.ID, "monsterInfoPosition", this.position);
+    }
+
+    // Clear the instance reference before closing
     if (MonsterInfoDisplay.instance === this) {
       MonsterInfoDisplay.instance = null;
     }
-
-    //set the position to the current position of the window
-    const position = this.position;
-    game.settings.set(ANewFoe.ID, "infoDisplayPosition", position);
 
     return super.close(options);
   }
@@ -550,18 +547,34 @@ class MonsterInfoDisplay extends Application {
       ANewFoe.removePendingRequest(game.user.id, actorId, key);
 
       let rollFormula = "1d20";
+      let modifier = 0;
+
       if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
-        const modifier = await this.getPlayerModifier(key);
-        rollFormula += `${modifier >= 0 ? "+" : ""}${modifier}`;
+        const character = game.user.character;
+        if (character) {
+          modifier = character.system.abilities[key].mod;
+          rollFormula += modifier >= 0 ? `+${modifier}` : modifier;
+          console.log(
+            `${ANewFoe.ID} | Using character modifier for ${key}:`,
+            modifier
+          );
+        }
       }
 
       // Create and evaluate roll
       const roll = new Roll(rollFormula);
-      await roll.evaluate(); // Use async evaluate instead of evaluateSync
+      await roll.evaluate();
+
+      const total = roll.total;
+      console.log(`${ANewFoe.ID} | Roll result:`, {
+        formula: rollFormula,
+        total,
+        dc,
+      });
 
       let rollMessage = `Attempting to discern ${key.toUpperCase()}...`;
       if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
-        rollMessage += ` (${key.toUpperCase()} Check with ${roll.formula})`;
+        rollMessage += ` (${key.toUpperCase()} Check with ${rollFormula})`;
       }
 
       await ChatMessage.create({
@@ -572,15 +585,17 @@ class MonsterInfoDisplay extends Application {
         sound: CONFIG.sounds.dice,
       });
 
-      if (roll.total >= dc) {
+      if (total >= dc) {
+        console.log(`${ANewFoe.ID} | Roll succeeded:`, total, ">=", dc);
         // Send message to GM to reveal the stat
         game.socket.emit(`module.${ANewFoe.ID}`, {
           type: "revealStat",
           userId: game.user.id,
-          actorId: actorId,
+          actorId: this.actor.id,
           key: key,
         });
       } else {
+        console.log(`${ANewFoe.ID} | Roll failed:`, total, "<", dc);
         ui.notifications.info("The check failed to reveal the stat.");
       }
     } catch (error) {
@@ -848,10 +863,13 @@ class ANewFoe {
         now - this.DEBOUNCE.lastChat[messageKey] > this.DEBOUNCE.TIMEOUT
       ) {
         this.DEBOUNCE.lastChat[messageKey] = now;
-        await ChatMessage.create({
-          content: `Success! You've discovered the creature's ${data.key.toUpperCase()}!`,
-          speaker: ChatMessage.getSpeaker(),
-        });
+        // Only send chat message if we're the player who made the request
+        if (game.user.id === data.userId) {
+          await ChatMessage.create({
+            content: `Success! You've discovered the creature's ${data.key.toUpperCase()}!`,
+            speaker: ChatMessage.getSpeaker(),
+          });
+        }
       }
 
       if (MonsterInfoDisplay.instance) {
@@ -1072,140 +1090,20 @@ class ANewFoe {
   }
 
   static createGMApprovalUI() {
-    if (!game.user.isGM || this.gmApprovalUI) return;
+    if (!game.user.isGM || GMQueueApplication.instance) return;
 
-    try {
-      const existingUI = document.getElementById("gm-approval-ui");
-      if (existingUI) {
-        existingUI.remove();
-      }
-
-      const uiContainer = document.createElement("div");
-      uiContainer.id = "gm-approval-ui";
-      uiContainer.style.position = "absolute";
-      uiContainer.style.bottom = "10px";
-      uiContainer.style.right = "310px";
-      uiContainer.style.zIndex = "1000";
-      uiContainer.style.padding = "10px";
-      uiContainer.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
-      uiContainer.style.color = "#fff";
-      uiContainer.style.borderRadius = "5px";
-      uiContainer.style.maxWidth = "300px";
-      uiContainer.innerHTML = `
-        <h3 style="margin: 0 0 5px 0; color: #fff;">Pending Approvals</h3>
-        <ul id="gm-approval-list" style="list-style: none; margin: 0; padding: 0;"></ul>
-      `;
-
-      document.body.appendChild(uiContainer);
-      this.gmApprovalUI = uiContainer;
-      console.log(`${this.ID} | GM UI created successfully`);
-    } catch (error) {
-      console.error(`${this.ID} | Error creating GM UI:`, error);
-    }
+    const queue = new GMQueueApplication();
+    queue.render(true);
   }
 
   static updateGMApprovalUI() {
     if (!game.user.isGM) return;
 
-    try {
-      if (!this.gmApprovalUI || !document.body.contains(this.gmApprovalUI)) {
-        console.log(`${this.ID} | GM UI not found or detached, recreating...`);
-        this.createGMApprovalUI();
-      }
-
-      const list = this.gmApprovalUI?.querySelector("#gm-approval-list");
-      if (!list) {
-        console.error(`${this.ID} | GM Approval list element not found`);
-        return;
-      }
-
-      list.innerHTML = "";
-
-      this.PENDING_REQUESTS.forEach((req) => {
-        const user = game.users.get(req.userId);
-        const actor = game.actors.get(req.actorId);
-        if (!user || !actor) return;
-
-        const listItem = document.createElement("li");
-        listItem.style.cssText =
-          "display: flex; justify-content: space-between; align-items: center; margin: 5px 0; padding: 5px;";
-
-        const text = document.createElement("span");
-        text.textContent = `${
-          user.name
-        } requests ${req.statKey.toUpperCase()} of ${actor.name}`;
-        text.style.marginRight = "10px";
-
-        const buttons = document.createElement("div");
-        buttons.style.cssText = "display: flex; gap: 5px;";
-
-        const approveButton = document.createElement("button");
-        approveButton.innerHTML =
-          '<i class="fas fa-check-circle" style="color: green;"></i>';
-        approveButton.style.cssText =
-          "background: none; border: none; cursor: pointer; padding: 5px;";
-        approveButton.onclick = () => this.handleApproval(req);
-
-        const rejectButton = document.createElement("button");
-        rejectButton.innerHTML =
-          '<i class="fas fa-times-circle" style="color: red;"></i>';
-        rejectButton.style.cssText =
-          "background: none; border: none; cursor: pointer; padding: 5px;";
-        rejectButton.onclick = () => this.handleRejection(req);
-
-        buttons.append(approveButton, rejectButton);
-        listItem.append(text, buttons);
-        list.appendChild(listItem);
-      });
-
-      this.gmApprovalUI.style.display = this.PENDING_REQUESTS.length
-        ? "block"
-        : "none";
-    } catch (error) {
-      console.error(`${this.ID} | Error updating GM UI:`, error);
+    if (!GMQueueApplication.instance) {
+      this.createGMApprovalUI();
+    } else {
+      GMQueueApplication.instance.render();
     }
-  }
-
-  static handleApproval(req) {
-    // Clear auto-reject timeout if it exists
-    const timeoutKey = `${req.userId}-${req.actorId}-${req.statKey}`;
-    if (this.TIMEOUTS.has(timeoutKey)) {
-      clearTimeout(this.TIMEOUTS.get(timeoutKey));
-      this.TIMEOUTS.delete(timeoutKey);
-    }
-
-    // Send approval directly to the player
-    game.socket.emit(`module.${this.ID}`, {
-      type: "statRollApproved",
-      userId: req.userId,
-      actorId: req.actorId,
-      key: req.statKey,
-      dc: req.dc,
-      usePlayerStats: req.usePlayerStats,
-    });
-
-    // Remove the request from pending
-    this.removePendingRequest(req.userId, req.actorId, req.statKey);
-  }
-
-  static handleRejection(req) {
-    // Clear auto-reject timeout if it exists
-    const timeoutKey = `${req.userId}-${req.actorId}-${req.statKey}`;
-    if (this.TIMEOUTS.has(timeoutKey)) {
-      clearTimeout(this.TIMEOUTS.get(timeoutKey));
-      this.TIMEOUTS.delete(timeoutKey);
-    }
-
-    // Send rejection message
-    game.socket.emit(`module.${this.ID}`, {
-      type: "statRollRejected",
-      userId: req.userId,
-      tokenId: req.tokenId,
-      key: req.statKey, // Add the key to the rejection message
-    });
-
-    // Remove pending request and update UI
-    this.removePendingRequest(req.userId, req.actorId, req.statKey);
   }
 
   static registerSettings() {
@@ -1390,6 +1288,21 @@ class ANewFoe {
       icon: "fas fa-upload",
       type: BulkUploadConfig,
       restricted: true,
+    });
+
+    // Add new settings for window positions
+    game.settings.register(this.ID, "monsterInfoPosition", {
+      scope: "client",
+      config: false,
+      type: Object,
+      default: {},
+    });
+
+    game.settings.register(this.ID, "gmQueuePosition", {
+      scope: "client",
+      config: false,
+      type: Object,
+      default: {},
     });
   }
 
@@ -1593,11 +1506,11 @@ class ANewFoe {
     Hooks.on("renderTokenHUD", (app, html, data) => {
       if (game.user.isGM) {
         const token = app.object;
-        const revealBtn = $(`
-        <div class="control-icon reveal-monster" title="Reveal Monster">
+        const revealBtn = $(
+          `<div class="control-icon reveal-monster" title="Reveal Monster">
           <i class="fas fa-eye"></i>
-        </div>
-      `);
+        </div>`
+        );
         revealBtn.click((e) => ANewFoe.showRevealDialog(token));
         html.find(".col.right").append(revealBtn);
       }
@@ -1715,31 +1628,39 @@ class ANewFoe {
     if (token.mouseInteractionManager) {
       console.log(`${this.ID} | Configuring mouse interaction for`, token.name);
 
-      // Add click handler directly
+      // Replace the entire click handler setup with this:
       token.mouseInteractionManager.permissions.clickLeft = true;
       token.mouseInteractionManager.callbacks.clickLeft = async (event) => {
+        // Prevent the default token click behavior
+        event.preventDefault();
+        event.stopPropagation();
+
         console.log(`${this.ID} | Token clicked:`, token.name);
 
-        // Check if the user has observer or ownership permissions
-        const userPermissions = token.actor.permission;
         const userId = game.user.id;
-        const userPermissionLevel =
-          userPermissions[userId] || userPermissions.default;
+        const userPermissionLevel = token.actor.getUserLevel(userId);
 
-        if (userPermissionLevel >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER) {
-          console.log(
-            `${this.ID} | User has observer or ownership permissions, skipping Monster Info UI`
-          );
-          return;
+        // Only show token HUD if user is owner
+        if (userPermissionLevel >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER) {
+          return token._onClickLeft(event);
         }
 
-        // Open Monster Info UI if the user doesn't have observer or ownership permissions
-        await ANewFoe.showTokenInfo(token);
+        // For all other permission levels, show our custom UI if revealed
+        if (ANewFoe.isMonsterRevealed(token.document)) {
+          await ANewFoe.showTokenInfo(token);
+        }
       };
 
-      // Ensure right-click and double-click functionality is not blocked
-      token.mouseInteractionManager.permissions.clickRight = true;
-      token.mouseInteractionManager.permissions.clickLeft2 = true;
+      // Block other interactions for non-owners
+      if (
+        token.actor.getUserLevel(game.user.id) <
+        CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
+      ) {
+        token.mouseInteractionManager.permissions.clickLeft2 = false;
+        token.mouseInteractionManager.permissions.clickRight = false;
+        token.mouseInteractionManager.permissions.dragLeft = false;
+        token.mouseInteractionManager.permissions.dragRight = false;
+      }
     }
 
     // Add event listener for double right-click to target the token
@@ -1759,8 +1680,16 @@ class ANewFoe {
     }
 
     try {
-      // If same window exists, bring to front
-      if (MonsterInfoDisplay.instance?.token.id === token.id) {
+      // If instance exists but is closing, wait for it to finish
+      if (MonsterInfoDisplay.instance?._state === CLOSING) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      // If same window exists and is rendered, bring to front
+      if (
+        MonsterInfoDisplay.instance?.token.id === token.id &&
+        MonsterInfoDisplay.instance._state === RENDERED
+      ) {
         MonsterInfoDisplay.instance.bringToTop();
         return;
       }
@@ -1952,8 +1881,16 @@ class ANewFoe {
     }
 
     try {
-      // If same window exists, bring to front
-      if (MonsterInfoDisplay.instance?.token.id === token.id) {
+      // If instance exists but is closing, wait for it to finish
+      if (MonsterInfoDisplay.instance?._state === CLOSING) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      // If same window exists and is rendered, bring to front
+      if (
+        MonsterInfoDisplay.instance?.token.id === token.id &&
+        MonsterInfoDisplay.instance._state === RENDERED
+      ) {
         MonsterInfoDisplay.instance.bringToTop();
         return;
       }
@@ -2365,6 +2302,157 @@ class ANewFoe {
       console.error(`${this.ID} | Error processing stat roll:`, error);
       ui.notifications.error("There was an error processing the roll.");
     }
+  }
+
+  static async handleApproval(data) {
+    try {
+      // Clear timeout if it exists
+      const timeoutKey = `${data.userId}-${data.actorId}-${data.statKey}`;
+      if (this.TIMEOUTS.has(timeoutKey)) {
+        clearTimeout(this.TIMEOUTS.get(timeoutKey));
+        this.TIMEOUTS.delete(timeoutKey);
+      }
+
+      // Send approval to player with all necessary data
+      game.socket.emit(`module.${this.ID}`, {
+        type: "processApprovedStatRoll",
+        userId: data.userId,
+        actorId: data.actorId,
+        key: data.statKey,
+        dc: data.dc,
+        usePlayerStats: data.usePlayerStats,
+      });
+
+      // Remove the request from pending
+      this.removePendingRequest(data.userId, data.actorId, data.statKey);
+
+      // Update UI
+      if (GMQueueApplication.instance) {
+        GMQueueApplication.instance.render(true);
+      }
+    } catch (error) {
+      console.error(`${this.ID} | Error handling approval:`, error);
+    }
+  }
+
+  static async handleRejection(data) {
+    try {
+      // Clear timeout if it exists
+      const timeoutKey = `${data.userId}-${data.actorId}-${data.statKey}`;
+      if (this.TIMEOUTS.has(timeoutKey)) {
+        clearTimeout(this.TIMEOUTS.get(timeoutKey));
+        this.TIMEOUTS.delete(timeoutKey);
+      }
+
+      // Notify player of rejection
+      game.socket.emit(`module.${this.ID}`, {
+        type: "statRollRejected",
+        userId: data.userId,
+        actorId: data.actorId,
+        key: data.statKey,
+      });
+
+      // Remove request and update UI
+      this.removePendingRequest(data.userId, data.actorId, data.statKey);
+
+      // Update UI
+      if (GMQueueApplication.instance) {
+        GMQueueApplication.instance.render(true);
+      }
+    } catch (error) {
+      console.error(`${this.ID} | Error handling rejection:`, error);
+    }
+  }
+}
+
+// Add a new GMQueueApplication class
+class GMQueueApplication extends Application {
+  static instance = null;
+
+  constructor(options = {}) {
+    super(options);
+    GMQueueApplication.instance = this;
+  }
+
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: "gm-approval-queue",
+      template: "modules/anewfoe/templates/gm-queue.html",
+      title: "Monster Knowledge Requests",
+      width: 300,
+      height: "auto",
+      minimizable: true,
+      resizable: true,
+      dragDrop: [],
+      classes: ["gm-queue-window"],
+      popOut: true,
+    });
+  }
+
+  getData() {
+    return {
+      requests: ANewFoe.PENDING_REQUESTS.map((req) => {
+        const user = game.users.get(req.userId);
+        const actor = game.actors.get(req.actorId);
+        return {
+          ...req,
+          userName: user?.name || "Unknown",
+          monsterName: actor?.name || "Unknown Monster",
+        };
+      }),
+    };
+  }
+
+  /** @override */
+  setPosition(options = {}) {
+    const savedPosition = game.settings.get(ANewFoe.ID, "gmQueuePosition");
+    if (savedPosition) {
+      options = foundry.utils.mergeObject(savedPosition, options);
+    }
+    return super.setPosition(options);
+  }
+
+  /** @override */
+  async close(options = {}) {
+    if (this.position) {
+      await game.settings.set(ANewFoe.ID, "gmQueuePosition", this.position);
+    }
+    return super.close(options);
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+
+    html.on("click", ".approve-request", async (event) => {
+      const data = event.currentTarget.dataset;
+      // Find the full request data from PENDING_REQUESTS
+      const request = ANewFoe.PENDING_REQUESTS.find(
+        (req) =>
+          req.userId === data.userId &&
+          req.actorId === data.actorId &&
+          req.statKey === data.key
+      );
+
+      if (request) {
+        await ANewFoe.handleApproval(request);
+      }
+    });
+
+    html.on("click", ".reject-request", async (event) => {
+      const data = event.currentTarget.dataset;
+      const request = ANewFoe.PENDING_REQUESTS.find(
+        (req) =>
+          req.userId === data.userId &&
+          req.actorId === data.actorId &&
+          req.statKey === data.key
+      );
+
+      if (request) {
+        await ANewFoe.handleRejection(request);
+      }
+    });
+
+    // Existing approve handler...
   }
 }
 

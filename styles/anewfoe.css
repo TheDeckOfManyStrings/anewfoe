@@ -263,6 +263,79 @@
   color: #fff;
 }
 
+/* Add GM Queue styling to match Monster Info */
+.gm-queue-window {
+  background: rgba(0, 0, 0, 0.9);
+  border: none;
+  border-radius: 10px;
+  padding: 0;
+  opacity: 0.85;
+}
+
+.gm-queue-window .window-header {
+  background: rgba(0, 0, 0, 0.9);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+}
+
+.gm-queue-window .window-content {
+  background: rgba(0, 0, 0, 0.9);
+  border: none;
+  padding: 0;
+  border-radius: 0 0 10px 10px;
+}
+
+.gm-queue-container {
+  padding: 10px;
+  color: #fff;
+}
+
+.request-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  margin: 4px 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.request-info {
+  flex: 1;
+  margin-right: 10px;
+}
+
+.request-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.request-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  color: #fff;
+  transition: transform 0.2s;
+}
+
+.approve-request:hover {
+  color: #4CAF50;
+  transform: scale(1.2);
+}
+
+.reject-request:hover {
+  color: #f44336;
+  transform: scale(1.2);
+}
+
+.no-requests {
+  text-align: center;
+  color: #888;
+  padding: 20px;
+}
+
 #bulk-upload-save {
   border: 1px solid #000;
 
