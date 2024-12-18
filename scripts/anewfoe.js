@@ -1086,12 +1086,8 @@ class ANewFoe {
             req.statKey === statKey
           )
       );
+
       if (this.PENDING_REQUESTS.length !== initialLength) {
-        console.log(`${this.ID} | Removed pending request`, {
-          userId,
-          actorId,
-          statKey,
-        });
         this.savePendingRequests();
         this.updateGMApprovalUI();
       }
@@ -2435,15 +2431,14 @@ class ANewFoe {
   }
 
   static async handleRejection(data) {
-    try {
-      // Clear timeout if it exists
-      const timeoutKey = `${data.userId}-${data.actorId}-${data.statKey}`;
-      if (this.TIMEOUTS.has(timeoutKey)) {
-        clearTimeout(this.TIMEOUTS.get(timeoutKey));
-        this.TIMEOUTS.delete(timeoutKey);
-      }
+    if (!game.user.isGM) return;
 
-      // Notify player of rejection
+    try {
+      console.log(`${this.ID} | Rejection received`, data);
+      // Remove the pending request
+      this.removePendingRequest(data.userId, data.actorId, data.statKey);
+
+      // Notify the player
       game.socket.emit(`module.${this.ID}`, {
         type: "statRollRejected",
         userId: data.userId,
@@ -2451,15 +2446,45 @@ class ANewFoe {
         key: data.statKey,
       });
 
-      // Remove request and update UI
-      this.removePendingRequest(data.userId, data.actorId, data.statKey);
-
-      // Update UI
-      if (GMQueueApplication.instance) {
-        GMQueueApplication.instance.render(true);
-      }
+      // Update the GM queue UI
+      this.updateGMApprovalUI();
     } catch (error) {
       console.error(`${this.ID} | Error handling rejection:`, error);
+    }
+  }
+
+  static removePendingRequest(userId, actorId, statKey) {
+    if (game.user.isGM) {
+      // Clear auto-reject timeout if it exists
+      const timeoutKey = `${userId}-${actorId}-${statKey}`;
+      if (this.TIMEOUTS.has(timeoutKey)) {
+        clearTimeout(this.TIMEOUTS.get(timeoutKey));
+        this.TIMEOUTS.delete(timeoutKey);
+      }
+
+      // Remove the request and update the UI
+      const initialLength = this.PENDING_REQUESTS.length;
+      this.PENDING_REQUESTS = this.PENDING_REQUESTS.filter(
+        (req) =>
+          !(
+            req.userId === userId &&
+            req.actorId === actorId &&
+            req.statKey === statKey
+          )
+      );
+
+      if (this.PENDING_REQUESTS.length !== initialLength) {
+        this.savePendingRequests();
+        this.updateGMApprovalUI();
+      }
+    } else {
+      // Player sends a socket message to GM to remove the pending request
+      game.socket.emit(`module.${this.ID}`, {
+        type: "removePendingRequest",
+        userId,
+        actorId,
+        statKey,
+      });
     }
   }
 }
