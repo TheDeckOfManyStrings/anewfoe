@@ -1,15 +1,15 @@
 <form>
   <div class="monster-info">
     <div class="monster-header flexrow">
-      <img src="{{img}}" />
+      <img src="{{img}}" width="50" height="50"/>
       <h2>{{name}}</h2>
     </div>
     <div class="player-list">
       {{#each players}}
       <div class="player-row flexrow">
         <label>
-          <input type="checkbox" name="players" value="{{this.id}}" {{#if
-          this.known}}checked{{/if}}> {{this.name}}
+          <input type="checkbox" name="players" value="{{this.id}}" {{#if this.known}}checked{{/if}}>
+          {{this.name}}
         </label>
         {{#if this.known}}
         <span class="player-known"><i class="fas fa-check"></i></span>

@@ -812,6 +812,47 @@ class ANewFoe {
             }
           }
           break;
+        case "monsterRevealed":
+          if (game.user.id === data.userId) {
+            console.log(
+              `${this.ID} | Processing monster reveal update for player`
+            );
+
+            // Update learned monsters if revealed
+            if (data.isRevealed) {
+              const learnedMonsters =
+                game.settings.get(this.ID, "learnedMonsters") || {};
+              learnedMonsters[game.user.id] =
+                learnedMonsters[game.user.id] || [];
+              if (!learnedMonsters[game.user.id].includes(data.actorId)) {
+                learnedMonsters[game.user.id].push(data.actorId);
+                await game.settings.set(
+                  this.ID,
+                  "learnedMonsters",
+                  learnedMonsters
+                );
+              }
+            }
+
+            // Refresh affected tokens
+            for (const tokenId of data.tokenIds) {
+              const token = canvas.tokens.get(tokenId);
+              if (token) {
+                if (data.isRevealed) {
+                  await this._restoreTokenAppearance(token);
+                  this._makeTokenClickable(token);
+                } else {
+                  await this._processTokenVisibility(token);
+                }
+              }
+            }
+
+            // Refresh any open monster info display
+            if (MonsterInfoDisplay.instance) {
+              await MonsterInfoDisplay.instance.refresh();
+            }
+          }
+          break;
       }
     } catch (error) {
       console.error(`${this.ID} | Error handling socket message:`, error);
@@ -1486,13 +1527,24 @@ class ANewFoe {
     // Add reveal button to token HUD for GMs
     Hooks.on("renderTokenHUD", (app, html, data) => {
       if (game.user.isGM) {
-        const token = app.object;
-        const revealBtn = $(
-          `<div class="control-icon reveal-monster" title="Reveal Monster">
+        const revealBtn =
+          $(`<div class="control-icon reveal-monster" title="Reveal Monster">
           <i class="fas fa-eye"></i>
-        </div>`
-        );
-        revealBtn.click((e) => ANewFoe.showRevealDialog(token));
+        </div>`);
+
+        revealBtn.click(async () => {
+          const selectedTokens =
+            canvas.tokens.controlled.length > 0
+              ? canvas.tokens.controlled
+              : [app.object];
+
+          if (selectedTokens.length === 0) {
+            ui.notifications.warn("No tokens selected.");
+            return;
+          }
+          await ANewFoe.showRevealDialog(selectedTokens);
+        });
+
         html.find(".col.right").append(revealBtn);
       }
     });
@@ -1594,6 +1646,28 @@ class ANewFoe {
       if (this.gmApprovalUI) {
         this.gmApprovalUI.remove();
         this.gmApprovalUI = null;
+      }
+    });
+
+    // Modify the Token HUD to handle multiple selected tokens
+    Hooks.on("renderTokenHUD", (app, html, data) => {
+      if (game.user.isGM) {
+        // ...existing code...
+        const button = $(`<div class="control-icon anewfoe-reveal">
+          <img src="icons/svg/eye.svg" title="Reveal Monster" width="36" height="36">
+        </div>`);
+        button.on("click", async () => {
+          const selectedTokens =
+            canvas.tokens.controlled.length > 0
+              ? canvas.tokens.controlled
+              : [app.object];
+          if (selectedTokens.length === 0) {
+            ui.notifications.warn("No tokens selected.");
+            return;
+          }
+          await ANewFoe.showRevealDialog(selectedTokens);
+        });
+        html.find(".col.left").append(button);
       }
     });
   }
@@ -1974,18 +2048,13 @@ class ANewFoe {
   }
 
   static async revealMonster(token, selectedPlayerIds) {
-    console.log(`${this.ID} | Starting reveal process`);
+    console.log(`${this.ID} | Starting reveal process for token:`, token.name);
 
     try {
       const tokenDocument = token.document;
       const actorId = tokenDocument.getFlag(this.ID, "actorId");
       const currentlyRevealedTo =
         tokenDocument.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
-
-      // Find all tokens of the same type
-      const sameTypeTokens = canvas.tokens.placeables.filter(
-        (t) => t.document.getFlag(this.ID, "actorId") === actorId
-      );
 
       // Handle reveals and unreveals
       const playersToReveal = selectedPlayerIds.filter(
@@ -1995,36 +2064,32 @@ class ANewFoe {
         (id) => !selectedPlayerIds.includes(id)
       );
 
+      // Find all tokens of the same type
+      const sameTypeTokens = canvas.tokens.placeables.filter(
+        (t) => t.document.getFlag(this.ID, "actorId") === actorId
+      );
+
       // Process all player changes before updating tokens
-      const promises = [];
       for (const playerId of playersToReveal) {
-        promises.push(ANewFoe.learnMonsterType(tokenDocument, playerId));
+        await this.learnMonsterType(tokenDocument, playerId);
       }
+
       for (const playerId of playersToUnreveal) {
-        promises.push(ANewFoe.unlearnMonsterType(tokenDocument, playerId));
+        await this.unlearnMonsterType(tokenDocument, playerId);
       }
-      await Promise.all(promises);
 
-      // Update each token's reveal state and appearance
+      // Update each token's reveal state
       for (const currentToken of sameTypeTokens) {
-        const currentDoc = currentToken.document;
-
-        // Update reveal flags
-        await currentDoc.setFlag(
+        await currentToken.document.setFlag(
           this.ID,
           this.FLAGS.REVEALED,
           selectedPlayerIds.length > 0
         );
-        await currentDoc.setFlag(
+        await currentToken.document.setFlag(
           this.ID,
           this.FLAGS.REVEALED_TO,
           selectedPlayerIds
         );
-
-        // Update token appearance
-        if (game.user.isGM) {
-          await ANewFoe.updateTokenOverlay(currentToken);
-        }
       }
 
       // Update actor permissions
@@ -2032,56 +2097,60 @@ class ANewFoe {
         const updates = {
           "permission.default": CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED,
         };
-
-        // Reset permissions for unrevealed players
-        for (const playerId of playersToUnreveal) {
-          updates[`permission.${playerId}`] =
-            CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED;
-        }
-
-        // Set permissions for revealed players
         for (const playerId of selectedPlayerIds) {
           updates[`permission.${playerId}`] =
             CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
         }
-
         await token.actor.update(updates);
       }
 
-      // Send notifications
+      // Send notifications to affected players
       if (playersToReveal.length > 0) {
+        // Create chat message for newly revealed players
         await ChatMessage.create({
-          content: `${sameTypeTokens.length} creature${
-            sameTypeTokens.length > 1 ? "s have" : " has"
-          } been revealed to you.`,
+          content: `${token.name} has been revealed to you.`,
           whisper: playersToReveal,
           speaker: ChatMessage.getSpeaker({ alias: "System" }),
         });
+
+        // Notify each player individually
+        for (const playerId of playersToReveal) {
+          game.socket.emit(`module.${this.ID}`, {
+            type: "monsterRevealed",
+            userId: playerId,
+            tokenIds: sameTypeTokens.map((t) => t.id),
+            tokenName: token.name,
+            actorId: actorId,
+            isRevealed: true,
+          });
+        }
       }
 
       if (playersToUnreveal.length > 0) {
+        // Create chat message for unrevealed players
         await ChatMessage.create({
-          content: `${sameTypeTokens.length} creature${
-            sameTypeTokens.length > 1 ? "s have" : " has"
-          } been hidden from you.`,
+          content: `${token.name} has been hidden from you.`,
           whisper: playersToUnreveal,
           speaker: ChatMessage.getSpeaker({ alias: "System" }),
         });
+
+        // Notify each player individually about hiding
+        for (const playerId of playersToUnreveal) {
+          game.socket.emit(`module.${this.ID}`, {
+            type: "monsterRevealed",
+            userId: playerId,
+            tokenIds: sameTypeTokens.map((t) => t.id),
+            tokenName: token.name,
+            actorId: actorId,
+            isRevealed: false,
+          });
+        }
       }
 
-      // Force scene refresh for affected players
-      const affectedPlayers = [
-        ...new Set([...playersToReveal, ...playersToUnreveal]),
-      ];
-      game.socket.emit(`module.${this.ID}`, {
-        type: "refreshScene",
-        playerIds: affectedPlayers,
-      });
-
-      // Update all token overlays
+      // Update GM overlay
       if (game.user.isGM) {
         for (const token of sameTypeTokens) {
-          await ANewFoe.updateTokenOverlay(token);
+          await this.updateTokenOverlay(token);
         }
       }
     } catch (error) {
@@ -2089,57 +2158,77 @@ class ANewFoe {
     }
   }
 
-  static async showRevealDialog(token) {
-    console.log(`${this.ID} | Showing reveal dialog for`, token.name);
+  static async showRevealDialog(tokens) {
+    // Ensure tokens is an array
+    if (!Array.isArray(tokens)) {
+      tokens = [tokens];
+    }
 
-    const actorId = token.document.getFlag(this.ID, "actorId");
+    console.log(
+      `${this.ID} | Showing reveal dialog for tokens:`,
+      tokens.map((t) => t.name)
+    );
+
+    // Get the first token for template data
+    const mainToken = tokens[0];
     const learnedMonsters = game.settings.get(this.ID, "learnedMonsters") || {};
     const revealedTo =
-      token.document.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
+      mainToken.document.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
+
+    // Get players with their current reveal status
+    const players = game.users
+      .filter((u) => !u.isGM)
+      .map((u) => ({
+        id: u.id,
+        name: u.name,
+        known:
+          revealedTo.includes(u.id) ||
+          learnedMonsters[u.id]?.includes(
+            mainToken.document.getFlag(this.ID, "actorId")
+          ),
+      }));
 
     const content = await renderTemplate(this.TEMPLATES.REVEAL_DIALOG, {
-      img: token.document.texture.src,
-      name: token.name,
-      players: game.users
-        .filter((u) => !u.isGM)
-        .map((u) => ({
-          id: u.id,
-          name: u.name,
-          known:
-            learnedMonsters[u.id]?.includes(actorId) ||
-            revealedTo.includes(u.id),
-        })),
+      img: mainToken.document.texture.src,
+      name:
+        tokens.length > 1
+          ? `${tokens.length} Selected Monsters`
+          : mainToken.name,
+      players: players,
     });
 
-    new Dialog(
-      {
-        title: "Reveal Monster",
-        content: content,
-        buttons: {
-          reveal: {
-            icon: '<i class="fas fa-eye"></i>',
-            label: "Reveal",
-            callback: async (html) => {
-              const selectedPlayers = html
-                .find("input:checked")
-                .map((i, el) => el.value)
-                .get();
-              await ANewFoe.revealMonster(token, selectedPlayers);
-            },
-          },
-          cancel: {
-            icon: '<i class="fas fa-times"></i>',
-            label: "Cancel",
+    new Dialog({
+      title: tokens.length > 1 ? "Reveal Multiple Monsters" : "Reveal Monster",
+      content: content,
+      buttons: {
+        reveal: {
+          icon: '<i class="fas fa-eye"></i>',
+          label: "Reveal",
+          callback: async (html) => {
+            const selectedPlayerIds = html
+              .find('input[name="players"]:checked')
+              .map(function () {
+                return this.value;
+              })
+              .get();
+            console.log(
+              `${this.ID} | Selected players for reveal:`,
+              selectedPlayerIds
+            );
+
+            // Process each token
+            for (const token of tokens) {
+              await this.revealMonster(token, selectedPlayerIds);
+            }
           },
         },
-        default: "reveal",
-        classes: ["reveal-monster-dialog", "app"], // Add 'app' class here
+        cancel: {
+          icon: '<i class="fas fa-times"></i>',
+          label: "Cancel",
+        },
       },
-      {
-        id: "reveal-monster-dialog", // Add unique ID
-        classes: ["reveal-monster-window"], // Add additional class for the window
-      }
-    ).render(true);
+      default: "reveal",
+    }).render(true);
   }
 
   static async learnMonsterType(tokenDocument, userId) {
