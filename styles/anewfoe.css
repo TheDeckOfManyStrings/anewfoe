@@ -81,13 +81,13 @@
 .monster-info-window .window-header {
   display: flex;
   justify-content: flex-end;
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.8);
   border-bottom: none;
   border-radius: 10px 10px 0 0;
 }
 
 .monster-info-window .window-content {
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.8);
   border: none;
   padding: 0;
   border-radius: 0 0 10px 10px;
@@ -203,7 +203,7 @@
 
 /* Update reveal dialog styles */
 .reveal-monster-window {
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.8);
   border: none;
   border-radius: 10px;
   color: #fff;
@@ -265,7 +265,7 @@
 
 /* Add GM Queue styling to match Monster Info */
 .gm-queue-window {
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.8);
   border: none;
   border-radius: 10px;
   padding: 0;
@@ -273,13 +273,13 @@
 }
 
 .gm-queue-window .window-header {
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.8);
   border-bottom: none;
   border-radius: 10px 10px 0 0;
 }
 
 .gm-queue-window .window-content {
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.8);
   border: none;
   padding: 0;
   border-radius: 0 0 10px 10px;
@@ -321,7 +321,7 @@
 }
 
 .approve-request:hover {
-  color: #4CAF50;
+  color: #4caf50;
   transform: scale(1.2);
 }
 
