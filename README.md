@@ -7,7 +7,7 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
 ## Usage
 
 1. **Initialize the Module**: Ensure the module is enabled in Foundry VTT.
-2. **Configure Settings**: Adjust the settings as per your campaign needs. Visualizations and stat roll characteristics can be customized for your campaigns needs.
+2. **Configure Settings**: Adjust the settings as per your campaign needs. Visualizations and stat roll characteristics can be customized independently.
 3. **Hide and Reveal Monsters**: Use the new token hud button on each token to hide and reveal monsters during gameplay.
 4. **Manage Stat Rolls**: Approve or reject player rolls in the GM queue window to reveal monster stats.
 5. **Bulk Upload Knowledge**: Use the bulk upload feature to grant players knowledge of multiple monsters at once. (Intended for use before or after game time)
