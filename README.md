@@ -4,6 +4,14 @@
 
 ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of monsters in your game. It hides unknown monsters from players until they are identified, providing a more immersive experience. The module allows GMs to manage monster knowledge, reveal stats, and handle bulk uploads of monster knowledge.
 
+## Usage
+
+1. **Initialize the Module**: Ensure the module is enabled in Foundry VTT.
+2. **Configure Settings**: Adjust the settings as per your campaign needs.
+3. **Hide and Reveal Monsters**: Use the module to hide and reveal monsters during gameplay.
+4. **Bulk Upload Knowledge**: Use the bulk upload feature to grant players knowledge of multiple monsters at once.
+5. **Manage Stat Rolls**: Approve or reject player rolls to reveal monster stats.
+
 ## Setup
 
 Base settings for the module should be already set up. If you wish to prepopulate some of the known monsters in the players lists you can use the bulk upload feature in the module settings. After using the bulk upload feature a page reload is recommended. You can use the below array as a starter entry:
@@ -263,13 +271,5 @@ Base settings for the module should be already set up. If you wish to prepopulat
   - **Icon**: `fas fa-upload`
   - **Type**: `BulkUploadConfig`
   - **Restricted**: `true`
-
-## Usage
-
-1. **Initialize the Module**: Ensure the module is enabled in Foundry VTT.
-2. **Configure Settings**: Adjust the settings as per your campaign needs.
-3. **Hide and Reveal Monsters**: Use the module to hide and reveal monsters during gameplay.
-4. **Bulk Upload Knowledge**: Use the bulk upload feature to grant players knowledge of multiple monsters at once.
-5. **Manage Stat Rolls**: Approve or reject player rolls to reveal monster stats.
 
 For detailed instructions and support, refer to the module's documentation or contact the author.
