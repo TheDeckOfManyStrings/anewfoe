@@ -4,6 +4,14 @@
 
 ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of monsters in your game. It hides unknown monsters from players until they are identified, providing a more immersive experience. The module allows GMs to manage monster knowledge, reveal stats, and handle bulk uploads of monster knowledge.
 
+## Features
+
+- **Hide Unknown Monsters**: Automatically hides monsters that players have not yet identified.
+- **Reveal Monster Stats**: Allows players to reveal specific stats of monsters after identification.
+- **Bulk Upload Monster Knowledge**: GMs can upload a list of monsters that players have learned about.
+- **GM Approval for Stat Rolls**: GMs can approve or reject player rolls to discover monster stats.
+- **Customizable DC Modifiers**: Adjust the difficulty of revealing monster stats.
+
 ## Usage
 
 1. **Initialize the Module**: Ensure the module is enabled in Foundry VTT.
@@ -123,15 +131,6 @@ Base settings for the module should be already set up. If you wish to prepopulat
   "Spider Swarm"
 ]
 ```
-
-## Features
-
-- **Hide Unknown Monsters**: Automatically hides monsters that players have not yet identified.
-- **Reveal Monster Stats**: Allows players to reveal specific stats of monsters after identification.
-- **Bulk Upload Monster Knowledge**: GMs can upload a list of monsters that players have learned about.
-- **GM Approval for Stat Rolls**: GMs can approve or reject player rolls to discover monster stats.
-- **Customizable DC Modifiers**: Adjust the difficulty of revealing monster stats.
-- **Socket Communication**: Synchronizes monster knowledge and stat reveal requests between players and GMs.
 
 ## Settings
 
