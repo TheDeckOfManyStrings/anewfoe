@@ -4,6 +4,118 @@
 
 ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of monsters in your game. It hides unknown monsters from players until they are identified, providing a more immersive experience. The module allows GMs to manage monster knowledge, reveal stats, and handle bulk uploads of monster knowledge.
 
+## Setup
+
+Base settings for the module should be already set up. If you wish to prepopulate some of the known monsters in the players lists you can use the bulk upload feature in the module settings. After using the bulk upload feature a page reload is recommended. You can use the below array as a starter entry:
+
+```
+[
+  "Goblin",
+  "Kobold",
+  "Orc",
+  "Hobgoblin",
+  "Bandit",
+  "Bandit Captain",
+  "Bugbear",
+  "Gnoll",
+  "Ogre",
+  "Wolf",
+  "Dire Wolf",
+  "Worg",
+  "Zombie",
+  "Skeleton",
+  "Ghoul",
+  "Shadow",
+  "Giant Spider",
+  "Giant Rat",
+  "Giant Frog",
+  "Giant Snake",
+  "Rat",
+  "Blink Dog",
+  "Flying Snake",
+  "Quasit",
+  "Imp",
+  "Mimic",
+  "Gelatinous Cube",
+  "Ochre Jelly",
+  "Gray Ooze",
+  "Grick",
+  "Dust Mephit",
+  "Steam Mephit",
+  "Mud Mephit",
+  "Cockatrice",
+  "Giant Scorpion",
+  "Harpy",
+  "Will-o'-Wisp",
+  "Stirge",
+  "Basilisk",
+  "Animated Armor",
+  "Scout",
+  "Pseudodragon",
+  "Pixie",
+  "Sprite",
+  "Myconid Sprout",
+  "Flumph",
+  "Giant Goat",
+  "Vampiric Mist",
+  "Giant Vulture",
+  "Merfolk",
+  "Aarakocra",
+  "Banshee",
+  "Giant Crab",
+  "Twig Blight",
+  "Commoner",
+  "Guard",
+  "Noble",
+  "Acolyte",
+  "Apprentice Wizard",
+  "Cultist",
+  "Cult Fanatic",
+  "Thug",
+  "Veteran",
+  "Assassin",
+  "Bandit Leader",
+  "Spy",
+  "Mage",
+  "Knight",
+  "Priest",
+  "Ruffian",
+  "Merchant",
+  "Peasant",
+  "Beggar",
+  "Farmer",
+  "Town Guard",
+  "City Watch",
+  "Dockworker",
+  "Scholar",
+  "Scribe",
+  "Tavernkeeper",
+  "Sailor",
+  "Blacksmith",
+  "Stablehand",
+  "Hunter",
+  "Fisherman",
+  "Herbalist",
+  "Artisan",
+  "Apothecary",
+  "Miner",
+  "Militiaman",
+  "Shepherd",
+  "Griffon Hatchling",
+  "Young Owlbear",
+  "Young Hippogriff",
+  "Baby Dragon Wyrmling",
+  "Young Giant Toad",
+  "Young Hydra",
+  "Dire Boar",
+  "Dire Bear",
+  "Dire Ape",
+  "Raven Swarm",
+  "Bat Swarm",
+  "Spider Swarm"
+]
+```
+
 ## Features
 
 - **Hide Unknown Monsters**: Automatically hides monsters that players have not yet identified.
@@ -23,7 +135,6 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Type**: String
   - **Choices**: `silhouette`
   - **Default**: `silhouette`
-  - **Scope**: `world`
   - **Requires Reload**: `true`
 
 ### Stat Reveal Settings
@@ -34,7 +145,6 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Hint**: If enabled, players can reveal monster stats after the monster has been revealed.
   - **Type**: Boolean
   - **Default**: `true`
-  - **Scope**: `world`
   - **Requires Reload**: `true`
 
 - **Use Player Character Stats**
@@ -43,7 +153,6 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Hint**: If enabled, ability checks will use the player's owned character's modifiers instead of flat d20 rolls.
   - **Type**: Boolean
   - **Default**: `false`
-  - **Scope**: `world`
 
 - **DC Calculation Method**
 
@@ -52,7 +161,6 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Type**: String
   - **Choices**: `fixedValue`, `challengeRatingScaling`
   - **Default**: `challengeRatingScaling`
-  - **Scope**: `world`
 
 - **Fixed DC Value**
 
@@ -61,20 +169,17 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Type**: Number
   - **Default**: `15`
   - **Range**: { min: 1, max: 30, step: 1 }
-  - **Scope**: `world`
 
 - **DC Modifiers**
 
   - **Name**: `dcModifiers`
   - **Type**: Object
   - **Default**: { hp: 0, ac: 0, speed: 0, str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 }
-  - **Scope**: `world`
 
 - **GM DC Adjustments**
   - **Name**: `gmDCAdjustments`
   - **Type**: Object
   - **Default**: { hp: 0, ac: 0, speed: 0, str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 }
-  - **Scope**: `world`
 
 ### Approval Settings
 
@@ -84,7 +189,6 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Hint**: If enabled, the GM must approve all player rolls to discover monster stats.
   - **Type**: Boolean
   - **Default**: `true`
-  - **Scope**: `world`
 
 - **Enable Auto-Reject**
 
@@ -92,7 +196,6 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Hint**: Automatically reject stat check requests after a specified time.
   - **Type**: Boolean
   - **Default**: `false`
-  - **Scope**: `world`
 
 - **Auto-Reject Timer (minutes)**
   - **Name**: `autoRejectTimer`
@@ -100,7 +203,6 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Type**: Number
   - **Default**: `5`
   - **Range**: { min: 1, max: 60, step: 1 }
-  - **Scope**: `world`
 
 ### State Persistence Settings
 
@@ -110,7 +212,6 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Hint**: Monsters that players have learned about.
   - **Type**: Object
   - **Default**: {}
-  - **Scope**: `world`
 
 - **Revealed Monster Stats**
 
@@ -118,7 +219,6 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Hint**: Stats that have been revealed to players.
   - **Type**: Object
   - **Default**: {}
-  - **Scope**: `world`
 
 - **Monster Knowledge Details**
 
@@ -126,13 +226,11 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Hint**: Detailed information about monster knowledge.
   - **Type**: Object
   - **Default**: {}
-  - **Scope**: `world`
 
 - **Pending Requests**
   - **Name**: `pendingRequests`
   - **Type**: Array
   - **Default**: []
-  - **Scope**: `world`
 
 ### Window Position Settings
 
@@ -141,13 +239,11 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
   - **Name**: `monsterInfoPosition`
   - **Type**: Object
   - **Default**: {}
-  - **Scope**: `client`
 
 - **GM Queue Position**
   - **Name**: `gmQueuePosition`
   - **Type**: Object
   - **Default**: {}
-  - **Scope**: `client`
 
 ## Menus
 
