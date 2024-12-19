@@ -4,6 +4,8 @@
 
 ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of monsters in your game. It hides unknown monsters from players until they are identified, providing a more immersive experience. The module allows GMs to manage monster knowledge, reveal stats, and handle bulk uploads of monster knowledge.
 
+## Examples
+
 ## Features
 
 - **Hide Unknown Monsters**: Automatically hides monsters that players have not yet identified.
