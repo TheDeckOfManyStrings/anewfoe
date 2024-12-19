@@ -6,7 +6,7 @@
     "minimum": "12",
     "verified": "12"
   },
-  "description": "A New Foe Appers! This module is designed to hide all unknown monsters from your players. It keeps a list of all known monsters from each player, when a monster is not known by someone in the party, it hides the character until the GM has time to describe the new monster or the players spend time to try to identify it. It provides a ui in the monster pane to allow the DM to toggle known state and switches out the token picture when the new monster is known.",
+  "description": "A New Foe Appers! This module is designed to hide all unknown monsters from your players. It keeps a list of all known monsters from each player, when a monster is not known by someone in the party, it hides the character until the GM has time to describe the new monster or the players spend time to try to identify it. It provides a ui in the monster pane to allow the DM to toggle known state and switches out the token picture when the new monster is known. Once players 'learn' a new monster they can then access a panel with basic stats and make rolls to determine additional information about a given token.",
   "authors": [
     {
       "name": "TheDeckOfManyStrings",
