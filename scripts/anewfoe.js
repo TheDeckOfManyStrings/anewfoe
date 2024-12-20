@@ -1696,59 +1696,87 @@ class ANewFoe {
   }
 
   static _makeTokenClickable(token) {
-    console.log(`${this.ID} | Making token clickable:`, token.name);
+    try {
+      if (!token || !token.actor) {
+        console.log(
+          `${this.ID} | Skipping clickable setup - token or actor not ready`
+        );
+        return;
+      }
 
-    // Enable interaction
-    token.interactive = true;
-    token.buttonMode = true;
+      console.log(`${this.ID} | Making token clickable:`, token.name);
 
-    // Set up click handling
-    if (token.mouseInteractionManager) {
-      console.log(`${this.ID} | Configuring mouse interaction for`, token.name);
+      // Enable interaction
+      token.interactive = true;
+      token.buttonMode = true;
 
-      // Replace the entire click handler setup with this:
-      token.mouseInteractionManager.permissions.clickLeft = true;
-      token.mouseInteractionManager.callbacks.clickLeft = async (event) => {
-        // Prevent the default token click behavior
-        event.preventDefault();
-        event.stopPropagation();
+      // Set up click handling
+      if (token.mouseInteractionManager) {
+        console.log(
+          `${this.ID} | Configuring mouse interaction for`,
+          token.name
+        );
 
-        console.log(`${this.ID} | Token clicked:`, token.name);
+        // Replace the entire click handler setup with this:
+        token.mouseInteractionManager.permissions.clickLeft = true;
+        token.mouseInteractionManager.callbacks.clickLeft = async (event) => {
+          try {
+            // Prevent the default token click behavior
+            event.preventDefault();
+            event.stopPropagation();
 
-        const userId = game.user.id;
-        const userPermissionLevel = token.actor.getUserLevel(userId);
+            console.log(`${this.ID} | Token clicked:`, token.name);
 
-        // Only show token HUD if user is owner
-        if (userPermissionLevel >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER) {
-          return token._onClickLeft(event);
-        }
+            const userId = game.user.id;
+            // Add null check for actor
+            if (!token.actor) {
+              console.warn(
+                `${this.ID} | Actor not available for token:`,
+                token.name
+              );
+              return;
+            }
 
-        // For all other permission levels, show our custom UI if revealed
-        if (ANewFoe.isMonsterRevealed(token.document)) {
-          if (game.settings.get(ANewFoe.ID, "enableStatReveal")) {
-            await ANewFoe.showTokenInfo(token);
+            const userPermissionLevel = token.actor.getUserLevel(userId);
+
+            // Only show token HUD if user is owner
+            if (userPermissionLevel >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER) {
+              return token._onClickLeft(event);
+            }
+
+            // For all other permission levels, show our custom UI if revealed
+            if (ANewFoe.isMonsterRevealed(token.document)) {
+              if (game.settings.get(ANewFoe.ID, "enableStatReveal")) {
+                await ANewFoe.showTokenInfo(token);
+              }
+            }
+          } catch (error) {
+            console.error(`${this.ID} | Error in click handler:`, error);
           }
+        };
+
+        // Block other interactions for non-owners
+        if (
+          token.actor &&
+          token.actor.getUserLevel(game.user.id) <
+            CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
+        ) {
+          token.mouseInteractionManager.permissions.clickLeft2 = false;
+          token.mouseInteractionManager.permissions.clickRight = false;
+          token.mouseInteractionManager.permissions.dragLeft = false;
+          token.mouseInteractionManager.permissions.dragRight = false;
         }
-      };
-
-      // Block other interactions for non-owners
-      if (
-        token.actor.getUserLevel(game.user.id) <
-        CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
-      ) {
-        token.mouseInteractionManager.permissions.clickLeft2 = false;
-        token.mouseInteractionManager.permissions.clickRight = false;
-        token.mouseInteractionManager.permissions.dragLeft = false;
-        token.mouseInteractionManager.permissions.dragRight = false;
       }
+
+      // Add event listener for double right-click to target the token
+      token.on("rightdown", (event) => {
+        if (event.data.originalEvent.detail === 2) {
+          token.setTarget(!token.isTargeted, { releaseOthers: false });
+        }
+      });
+    } catch (error) {
+      console.error(`${this.ID} | Error making token clickable:`, error);
     }
-
-    // Add event listener for double right-click to target the token
-    token.on("rightdown", (event) => {
-      if (event.data.originalEvent.detail === 2) {
-        token.setTarget(!token.isTargeted, { releaseOthers: false });
-      }
-    });
   }
 
   static async showTokenInfo(token) {
