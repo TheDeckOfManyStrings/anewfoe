@@ -1572,29 +1572,29 @@ class ANewFoe {
     });
 
     // Add reveal button to token HUD for GMs
-    Hooks.on("renderTokenHUD", (app, html, data) => {
-      if (game.user.isGM) {
-        const revealBtn =
-          $(`<div class="control-icon reveal-monster" title="Reveal Monster">
-          <i class="fas fa-eye"></i>
-        </div>`);
+    // Hooks.on("renderTokenHUD", (app, html, data) => {
+    //   if (game.user.isGM) {
+    //     const revealBtn =
+    //       $(`<div class="control-icon reveal-monster" title="Reveal Monster">
+    //       <i class="fas fa-eye"></i>
+    //     </div>`);
 
-        revealBtn.click(async () => {
-          const selectedTokens =
-            canvas.tokens.controlled.length > 0
-              ? canvas.tokens.controlled
-              : [app.object];
+    //     revealBtn.click(async () => {
+    //       const selectedTokens =
+    //         canvas.tokens.controlled.length > 0
+    //           ? canvas.tokens.controlled
+    //           : [app.object];
 
-          if (selectedTokens.length === 0) {
-            ui.notifications.warn("No tokens selected.");
-            return;
-          }
-          await ANewFoe.showRevealDialog(selectedTokens);
-        });
+    //       if (selectedTokens.length === 0) {
+    //         ui.notifications.warn("No tokens selected.");
+    //         return;
+    //       }
+    //       await ANewFoe.showRevealDialog(selectedTokens);
+    //     });
 
-        html.find(".col.right").append(revealBtn);
-      }
-    });
+    //     html.find(".col.right").append(revealBtn);
+    //   }
+    // });
 
     Hooks.once("ready", () => {
       console.log(`${this.ID} | Module ready as ${game.user.name}`);
