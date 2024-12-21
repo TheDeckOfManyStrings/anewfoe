@@ -1,39 +1,11 @@
 <form>
+  <!-- ...existing code... -->
+  {{#each modifiers}}
   <div class="form-group">
-    <label for="hp-modifier">Hit Points Modifier</label>
-    <input type="number" name="hp" id="hp-modifier" value="{{modifiers.hp}}">
+    <label for="modifier-{{key}}">{{label}}</label>
+    <input type="number" name="modifier-{{key}}" value="{{value}}" />
   </div>
-  <div class="form-group">
-    <label for="ac-modifier">Armor Class Modifier</label>
-    <input type="number" name="ac" id="ac-modifier" value="{{modifiers.ac}}">
-  </div>
-  <div class="form-group">
-    <label>Speed Modifier</label>
-    <input type="number" name="modifier-speed" value="{{modifiers.speed}}" />
-  </div>
-  <div class="form-group">
-    <label>Strength Modifier</label>
-    <input type="number" name="modifier-str" value="{{modifiers.str}}" />
-  </div>
-  <div class="form-group">
-    <label>Dexterity Modifier</label>
-    <input type="number" name="modifier-dex" value="{{modifiers.dex}}" />
-  </div>
-  <div class="form-group">
-    <label>Constitution Modifier</label>
-    <input type="number" name="modifier-con" value="{{modifiers.con}}" />
-  </div>
-  <div class="form-group">
-    <label>Intelligence Modifier</label>
-    <input type="number" name="modifier-int" value="{{modifiers.int}}" />
-  </div>
-  <div class="form-group">
-    <label>Wisdom Modifier</label>
-    <input type="number" name="modifier-wis" value="{{modifiers.wis}}" />
-  </div>
-  <div class="form-group">
-    <label>Charisma Modifier</label>
-    <input type="number" name="modifier-cha" value="{{modifiers.cha}}" />
-  </div>
-  <button type="submit">Save</button>
+  {{/each}}
+  <!-- ...existing code... -->
+  <button type="submit">Save Changes</button>
 </form>

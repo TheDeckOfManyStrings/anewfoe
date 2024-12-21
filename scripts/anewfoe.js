@@ -29,7 +29,8 @@ class DCModifiersConfig extends FormApplication {
     const modifiers = {};
     for (let [key, value] of Object.entries(formData)) {
       if (key.startsWith("modifier-")) {
-        modifiers[key.replace("modifier-", "")] = Number(value);
+        const stat = key.replace("modifier-", "");
+        modifiers[stat] = Number(value);
       }
     }
     await game.settings.set("anewfoe", "dcModifiers", modifiers);
