@@ -1411,39 +1411,66 @@ class ANewFoe {
 
     // Handle canvas ready
     Hooks.on("canvasReady", async () => {
-      if (!game.user.isGM) {
-        console.log(`${this.ID} | Canvas ready, processing tokens`);
+      console.log(`${this.ID} | Canvas ready, scene: ${canvas.scene?.name}`);
 
-        for (const token of canvas.tokens.placeables) {
+      // Add a small delay to ensure all tokens are fully loaded
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Process all tokens in the scene
+      for (const token of canvas.tokens.placeables) {
+        try {
           if (
             !token.document?.flags ||
             !token.document.getFlag(this.ID, "actorId")
           ) {
+            console.log(
+              `${this.ID} | Skipping token without flags:`,
+              token.name
+            );
             continue;
           }
 
-          const isKnown = ANewFoe.isMonsterTypeKnown(token.document);
-          const isRevealed = ANewFoe.isMonsterRevealed(token.document);
+          const isKnown = this.isMonsterTypeKnown(token.document);
+          const isRevealed = this.isMonsterRevealed(token.document);
 
-          if (isKnown || isRevealed) {
-            await ANewFoe._restoreTokenAppearance(token);
-            ANewFoe._makeTokenClickable(token);
+          console.log(`${this.ID} | Processing token:`, {
+            name: token.name,
+            isKnown,
+            isRevealed,
+          });
+
+          // Ensure token is properly initialized
+          if (!token.mesh || !token.mesh.texture) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+
+          if (game.user.isGM) {
+            await this.updateTokenOverlay(token);
           } else {
-            await ANewFoe._processTokenVisibility(token);
+            if (isKnown || isRevealed) {
+              await this._restoreTokenAppearance(token);
+              this._makeTokenClickable(token);
+            } else if (token.mesh && token.mesh.texture) {
+              await this._processTokenVisibility(token);
+            }
           }
-        }
-      } else {
-        // GM-side overlay updates
-        console.log(`${this.ID} | Canvas ready for GM, updating overlays`);
-        for (const token of canvas.tokens.placeables) {
-          if (token?.document?.flags) {
-            // Add a small delay to ensure token is fully initialized
-            setTimeout(() => {
-              this.updateTokenOverlay(token);
-            }, 100);
-          }
+        } catch (error) {
+          console.error(
+            `${this.ID} | Error processing token on canvas ready:`,
+            error
+          );
         }
       }
+
+      // Force a canvas update to ensure all changes are applied
+      canvas.tokens.render();
+    });
+
+    // Add a new hook for scene loading
+    Hooks.on("preLoadScene", (scene, data) => {
+      console.log(`${this.ID} | Scene pre-load:`, scene?.name);
+      // Clear any existing operations flag to ensure fresh processing
+      this.OPERATIONS.PROCESSING_VISIBILITY = false;
     });
 
     // Handle refreshToken
@@ -1895,72 +1922,71 @@ class ANewFoe {
   }
 
   static async _processTokenVisibility(token) {
-    if (this.OPERATIONS.PROCESSING_VISIBILITY) return;
+    if (!token || !token.document) {
+      console.warn(`${this.ID} | Invalid token for visibility processing`);
+      return;
+    }
+
+    if (this.OPERATIONS.PROCESSING_VISIBILITY) {
+      console.log(
+        `${this.ID} | Skipping visibility processing - already in progress`
+      );
+      return;
+    }
+
     this.OPERATIONS.PROCESSING_VISIBILITY = true;
+    console.log(`${this.ID} | Processing visibility for token:`, token.name);
 
     try {
       if (!token.document.hidden) {
-        // Temporarily hide the token during the transition
-        token.alpha = 0;
-
-        // Check if this is a reveal from hidden state
-        const isReveal = token.document._source?.hidden === true;
-
-        if (isReveal) {
-          // Use animated overlay only for reveals
-          ANewFoe._createAnimatedOverlay(token);
-
-          // Remove overlay and apply silhouette after animation
-          setTimeout(() => {
-            ANewFoe._removeBlackOverlay(token);
-            // Apply silhouette effect to token
-            if (token.mesh) {
-              token.mesh.tint = 0x000000;
-              token.mesh.alpha = 1;
-            }
-            // Restore token visibility
-            token.alpha = 1;
-          }, 1000);
-        } else {
-          // For regular movement, just ensure silhouette is applied
-          if (token.mesh) {
-            token.mesh.tint = 0x000000;
-            token.mesh.alpha = 1;
-          }
-          // Restore token visibility
-          token.alpha = 1;
+        // Ensure token is initialized
+        if (!token.mesh || !token.mesh.texture) {
+          console.log(`${this.ID} | Waiting for token mesh initialization`);
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
 
-        // Block visibility animation
-        if (token._animation) token._animation.kill();
-        if (token._alphaTransition) token._alphaTransition.kill();
-
-        // Apply visual changes locally
-        const originalImage = token.document.getFlag(this.ID, "originalImage");
-        if (originalImage && token.mesh) {
-          const texture = await loadTexture(originalImage);
-          token.mesh.texture = texture;
+        // Only proceed if the token is still valid
+        if (!token.mesh || !token.mesh.texture) {
+          console.warn(
+            `${this.ID} | Token mesh not available, skipping visibility processing`
+          );
+          return;
         }
 
-        // Update text display locally
+        // Force token to be visible first
+        token.visible = true;
+        token.alpha = 1;
+
+        // Apply silhouette effect
+        token.mesh.tint = 0x000000;
+        token.mesh.alpha = 1;
+
+        // Update text display if available
         if (token.text) {
           token.text.text = "Unknown Creature";
           token.text.visible = true;
           token.text.alpha = 1;
-          token.text.draw();
+          await token.text.draw();
         }
 
-        // Ensure the token is non-interactive for players
+        // Ensure non-interactive for players
         if (!game.user.isGM) {
           token.interactive = false;
           token.buttonMode = false;
         }
+
+        // Force token refresh safely
+        if (token.mesh && token.mesh.texture) {
+          await token.refresh();
+        }
       }
     } catch (error) {
       console.error(`${this.ID} | Error processing token visibility:`, error);
-      ANewFoe._removeBlackOverlay(token);
-      // Restore token visibility in case of error
-      token.alpha = 1;
+      // Ensure token is visible in case of error
+      if (token) {
+        token.alpha = 1;
+        token.visible = true;
+      }
     } finally {
       this.OPERATIONS.PROCESSING_VISIBILITY = false;
     }
@@ -2105,9 +2131,20 @@ class ANewFoe {
 
     try {
       const tokenDocument = token.document;
+      if (!tokenDocument) {
+        console.error(`${this.ID} | Token document not found for:`, token.name);
+        return;
+      }
+
       const actorId = tokenDocument.getFlag(this.ID, "actorId");
+      if (!actorId) {
+        console.error(`${this.ID} | Actor ID not found for token:`, token.name);
+        return;
+      }
+
       const currentlyRevealedTo =
         tokenDocument.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
+      console.log(`${this.ID} | Currently revealed to:`, currentlyRevealedTo);
 
       // Handle reveals and unreveals
       const playersToReveal = selectedPlayerIds.filter(
@@ -2117,9 +2154,21 @@ class ANewFoe {
         (id) => !selectedPlayerIds.includes(id)
       );
 
-      // Find all tokens of the same type
-      const sameTypeTokens = canvas.tokens.placeables.filter(
-        (t) => t.document.getFlag(this.ID, "actorId") === actorId
+      console.log(`${this.ID} | Players to reveal:`, playersToReveal);
+      console.log(`${this.ID} | Players to unreveal:`, playersToUnreveal);
+
+      // Find all tokens of the same type in the current scene
+      const sameTypeTokens = canvas.tokens.placeables.filter((t) => {
+        try {
+          return t.document?.getFlag(this.ID, "actorId") === actorId;
+        } catch (e) {
+          console.warn(`${this.ID} | Error checking token:`, e);
+          return false;
+        }
+      });
+
+      console.log(
+        `${this.ID} | Found ${sameTypeTokens.length} tokens of same type`
       );
 
       // Process all player changes before updating tokens
@@ -2131,73 +2180,74 @@ class ANewFoe {
         await this.unlearnMonsterType(tokenDocument, playerId);
       }
 
-      // Update each token's reveal state
+      // Update each token's reveal state with error handling
       for (const currentToken of sameTypeTokens) {
-        await currentToken.document.setFlag(
-          this.ID,
-          this.FLAGS.REVEALED,
-          selectedPlayerIds.length > 0
-        );
-        await currentToken.document.setFlag(
-          this.ID,
-          this.FLAGS.REVEALED_TO,
-          selectedPlayerIds
-        );
+        try {
+          if (!currentToken.document) continue;
+
+          const updates = {
+            [`flags.${this.ID}.${this.FLAGS.REVEALED}`]:
+              selectedPlayerIds.length > 0,
+            [`flags.${this.ID}.${this.FLAGS.REVEALED_TO}`]: selectedPlayerIds,
+          };
+
+          await currentToken.document.update(updates);
+
+          console.log(
+            `${this.ID} | Updated token:`,
+            currentToken.name,
+            updates
+          );
+        } catch (error) {
+          console.error(
+            `${this.ID} | Error updating token:`,
+            currentToken.name,
+            error
+          );
+        }
       }
 
-      // Update actor permissions
+      // Update actor permissions with error handling
       if (token.actor) {
-        const updates = {
-          "permission.default": CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED,
-        };
-        for (const playerId of selectedPlayerIds) {
-          updates[`permission.${playerId}`] =
-            CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
+        try {
+          const updates = {
+            "permission.default": CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED,
+          };
+
+          for (const playerId of selectedPlayerIds) {
+            updates[`permission.${playerId}`] =
+              CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
+          }
+
+          await token.actor.update(updates);
+          console.log(`${this.ID} | Updated actor permissions:`, updates);
+        } catch (error) {
+          console.error(
+            `${this.ID} | Error updating actor permissions:`,
+            error
+          );
         }
-        await token.actor.update(updates);
       }
 
       // Send notifications to affected players
       if (playersToReveal.length > 0) {
-        // Create chat message for newly revealed players
-        await ChatMessage.create({
-          content: `${token.name} has been revealed to you.`,
-          whisper: playersToReveal,
-          speaker: ChatMessage.getSpeaker({ alias: "System" }),
-        });
-
-        // Notify each player individually
-        for (const playerId of playersToReveal) {
-          game.socket.emit(`module.${this.ID}`, {
-            type: "monsterRevealed",
-            userId: playerId,
-            tokenIds: sameTypeTokens.map((t) => t.id),
-            tokenName: token.name,
-            actorId: actorId,
-            isRevealed: true,
-          });
-        }
+        await this._notifyPlayersOfReveal(
+          token,
+          sameTypeTokens,
+          playersToReveal,
+          actorId,
+          true
+        );
       }
 
       if (playersToUnreveal.length > 0) {
-        // Create chat message for unrevealed players
-        await ChatMessage.create({
-          content: `${token.name} has been hidden from you.`,
-          whisper: playersToUnreveal,
-          speaker: ChatMessage.getSpeaker({ alias: "System" }),
-        });
-
-        // Notify each player individually about hiding
-        for (const playerId of playersToUnreveal) {
-          game.socket.emit(`module.${this.ID}`, {
-            type: "monsterRevealed",
-            userId: playerId,
-            tokenIds: sameTypeTokens.map((t) => t.id),
-            tokenName: token.name,
-            actorId: actorId,
-            isRevealed: false,
-          });
-        }
+        await this._notifyPlayersOfReveal(
+          token,
+          sameTypeTokens,
+          playersToUnreveal,
+          actorId,
+          false
+        );
       }
 
       // Update GM overlay
@@ -2208,6 +2258,41 @@ class ANewFoe {
       }
     } catch (error) {
       console.error(`${this.ID} | Error in reveal monster:`, error);
+      ui.notifications.error("Error updating monster reveal status");
+    }
+  }
+
+  // Add this new helper method
+  static async _notifyPlayersOfReveal(
+    token,
+    sameTypeTokens,
+    playerIds,
+    actorId,
+    isRevealing
+  ) {
+    try {
+      // Create chat message
+      await ChatMessage.create({
+        content: `${token.name} has been ${
+          isRevealing ? "revealed to" : "hidden from"
+        } you.`,
+        whisper: playerIds,
+        speaker: ChatMessage.getSpeaker({ alias: "System" }),
+      });
+
+      // Notify each player individually
+      for (const playerId of playerIds) {
+        game.socket.emit(`module.${this.ID}`, {
+          type: "monsterRevealed",
+          userId: playerId,
+          tokenIds: sameTypeTokens.map((t) => t.id),
+          tokenName: token.name,
+          actorId: actorId,
+          isRevealed: isRevealing,
+        });
+      }
+    } catch (error) {
+      console.error(`${this.ID} | Error notifying players:`, error);
     }
   }
 
@@ -2304,14 +2389,20 @@ class ANewFoe {
     const actorId = tokenDocument.getFlag(this.ID, "actorId");
     if (!actorId) return;
 
-    const learnedMonsters = game.settings.get(this.ID, "learnedMonsters") || {};
-    if (learnedMonsters[userId]) {
-      learnedMonsters[userId] = learnedMonsters[userId].filter(
-        (id) => id !== actorId
-      );
-      await game.settings.set(this.ID, "learnedMonsters", learnedMonsters);
+    try {
+      console.log(`${this.ID} | Unlearning monster type for user:`, userId);
 
-      // Clear revealed stats for this monster
+      // Update learned monsters
+      const learnedMonsters =
+        game.settings.get(this.ID, "learnedMonsters") || {};
+      if (learnedMonsters[userId]) {
+        learnedMonsters[userId] = learnedMonsters[userId].filter(
+          (id) => id !== actorId
+        );
+        await game.settings.set(this.ID, "learnedMonsters", learnedMonsters);
+      }
+
+      // Clear revealed stats
       const revealedStats = game.settings.get(this.ID, "revealedStats") || {};
       const statKey = `${userId}.${actorId}`;
       if (revealedStats[statKey]) {
@@ -2319,9 +2410,30 @@ class ANewFoe {
         await game.settings.set(this.ID, "revealedStats", revealedStats);
       }
 
+      // Update all tokens of this actor type in all scenes
+      const scenes = game.scenes;
+      for (const scene of scenes) {
+        const tokens = scene.tokens.filter(
+          (t) => t.getFlag(this.ID, "actorId") === actorId
+        );
+        for (const token of tokens) {
+          const revealedTo =
+            token.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
+          const updatedRevealedTo = revealedTo.filter((id) => id !== userId);
+
+          await token.update({
+            [`flags.${this.ID}.${this.FLAGS.REVEALED}`]:
+              updatedRevealedTo.length > 0,
+            [`flags.${this.ID}.${this.FLAGS.REVEALED_TO}`]: updatedRevealedTo,
+          });
+        }
+      }
+
       console.log(
-        `${this.ID} | Removed monster ${actorId} from learned list for user ${userId}`
+        `${this.ID} | Successfully unlearned monster ${actorId} for user ${userId}`
       );
+    } catch (error) {
+      console.error(`${this.ID} | Error unlearning monster:`, error);
     }
   }
 
