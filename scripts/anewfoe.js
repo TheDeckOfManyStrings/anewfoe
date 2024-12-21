@@ -1346,6 +1346,15 @@ class ANewFoe {
       type: Object,
       default: {},
     });
+
+    game.settings.register(this.ID, "sendPlayerChat", {
+      name: "Send Player Chat Messages",
+      hint: "If disabled, players won't receive chat messages for reveal/hide events.",
+      scope: "world",
+      config: true,
+      type: Boolean,
+      default: true,
+    });
   }
 
   static registerHooks() {
@@ -2236,13 +2245,15 @@ class ANewFoe {
   ) {
     try {
       // Create chat message
-      await ChatMessage.create({
-        content: `${token.name} has been ${
-          isRevealing ? "revealed to" : "hidden from"
-        } you.`,
-        whisper: playerIds,
-        speaker: ChatMessage.getSpeaker({ alias: "System" }),
-      });
+      if (game.settings.get(this.ID, "sendPlayerChat")) {
+        await ChatMessage.create({
+          content: `${isRevealing ? token.name : "A token"} has been ${
+            isRevealing ? "revealed to" : "hidden from"
+          } you.`,
+          whisper: playerIds,
+          speaker: ChatMessage.getSpeaker({ alias: "System" }),
+        });
+      }
 
       // Notify each player individually
       for (const playerId of playerIds) {
