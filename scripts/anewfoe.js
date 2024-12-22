@@ -29,8 +29,7 @@ class DCModifiersConfig extends FormApplication {
     const modifiers = {};
     for (let [key, value] of Object.entries(formData)) {
       if (key.startsWith("modifier-")) {
-        const stat = key.replace("modifier-", "");
-        modifiers[stat] = Number(value);
+        modifiers[key.replace("modifier-", "")] = Number(value);
       }
     }
     await game.settings.set("anewfoe", "dcModifiers", modifiers);
@@ -866,8 +865,11 @@ class ANewFoe {
     try {
       const token = canvas.tokens.get(data.tokenId);
       if (!token) return;
-      // Remove references to REVEALED_TO and rely on learnedMonsters
-      await ANewFoe.learnMonsterType(token.document, data.userId);
+
+      await token.document.setFlag(this.ID, this.FLAGS.REVEALED, true);
+      await token.document.setFlag(this.ID, this.FLAGS.REVEALED_TO, [
+        data.userId,
+      ]);
     } catch (error) {
       console.error(`${this.ID} | Error setting token flags:`, error);
     }
@@ -1347,15 +1349,6 @@ class ANewFoe {
       type: Object,
       default: {},
     });
-
-    game.settings.register(this.ID, "sendPlayerChat", {
-      name: "Send Player Chat Messages",
-      hint: "If disabled, players won't receive chat messages for reveal/hide events.",
-      scope: "world",
-      config: true,
-      type: Boolean,
-      default: true,
-    });
   }
 
   static registerHooks() {
@@ -1582,29 +1575,29 @@ class ANewFoe {
     });
 
     // Add reveal button to token HUD for GMs
-    // Hooks.on("renderTokenHUD", (app, html, data) => {
-    //   if (game.user.isGM) {
-    //     const revealBtn =
-    //       $(`<div class="control-icon reveal-monster" title="Reveal Monster">
-    //       <i class="fas fa-eye"></i>
-    //     </div>`);
+    Hooks.on("renderTokenHUD", (app, html, data) => {
+      if (game.user.isGM) {
+        const revealBtn =
+          $(`<div class="control-icon reveal-monster" title="Reveal Monster">
+          <i class="fas fa-eye"></i>
+        </div>`);
 
-    //     revealBtn.click(async () => {
-    //       const selectedTokens =
-    //         canvas.tokens.controlled.length > 0
-    //           ? canvas.tokens.controlled
-    //           : [app.object];
+        revealBtn.click(async () => {
+          const selectedTokens =
+            canvas.tokens.controlled.length > 0
+              ? canvas.tokens.controlled
+              : [app.object];
 
-    //       if (selectedTokens.length === 0) {
-    //         ui.notifications.warn("No tokens selected.");
-    //         return;
-    //       }
-    //       await ANewFoe.showRevealDialog(selectedTokens);
-    //     });
+          if (selectedTokens.length === 0) {
+            ui.notifications.warn("No tokens selected.");
+            return;
+          }
+          await ANewFoe.showRevealDialog(selectedTokens);
+        });
 
-    //     html.find(".col.right").append(revealBtn);
-    //   }
-    // });
+        html.find(".col.right").append(revealBtn);
+      }
+    });
 
     Hooks.once("ready", () => {
       console.log(`${this.ID} | Module ready as ${game.user.name}`);
@@ -2137,49 +2130,82 @@ class ANewFoe {
     console.log(`${this.ID} | Starting reveal process for token:`, token.name);
 
     try {
-      const actorId = token.document.getFlag(this.ID, "actorId");
-      // Use learnedMonsters instead of token flags
-      const learnedMonsters =
-        game.settings.get(this.ID, "learnedMonsters") || {};
-      const currentlyKnown = learnedMonsters[selectedPlayerIds[0]] || [];
+      const tokenDocument = token.document;
+      if (!tokenDocument) {
+        console.error(`${this.ID} | Token document not found for:`, token.name);
+        return;
+      }
 
-      // Get all players that already know this actor
-      const allPlayers = game.users.filter((u) => !u.isGM).map((u) => u.id);
-      const revealedTo = allPlayers.filter((pid) => {
-        return (learnedMonsters[pid] || []).includes(actorId);
-      });
+      const actorId = tokenDocument.getFlag(this.ID, "actorId");
+      if (!actorId) {
+        console.error(`${this.ID} | Actor ID not found for token:`, token.name);
+        return;
+      }
 
-      // Determine reveal/unreveal sets
+      const currentlyRevealedTo =
+        tokenDocument.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
+      console.log(`${this.ID} | Currently revealed to:`, currentlyRevealedTo);
+
+      // Handle reveals and unreveals
       const playersToReveal = selectedPlayerIds.filter(
-        (p) => !revealedTo.includes(p)
+        (id) => !currentlyRevealedTo.includes(id)
       );
-      const playersToUnreveal = revealedTo.filter(
-        (p) => !selectedPlayerIds.includes(p)
+      const playersToUnreveal = currentlyRevealedTo.filter(
+        (id) => !selectedPlayerIds.includes(id)
       );
 
-      console.log(`${this.ID} | Currently revealed to:`, revealedTo);
       console.log(`${this.ID} | Players to reveal:`, playersToReveal);
       console.log(`${this.ID} | Players to unreveal:`, playersToUnreveal);
 
-      // Reveal: learnMonsterType
-      for (const p of playersToReveal) {
-        await this.learnMonsterType(token.document, p);
-      }
-
-      // Unreveal: unlearnMonsterType
-      for (const p of playersToUnreveal) {
-        await this.unlearnMonsterType(token.document, p);
-      }
-
-      // Apply changes to any tokens of the same actor
-      const sameTypeTokens = canvas.tokens.placeables.filter(
-        (t) => t.document.getFlag(this.ID, "actorId") === actorId
-      );
+      // Find all tokens of the same type in the current scene
+      const sameTypeTokens = canvas.tokens.placeables.filter((t) => {
+        try {
+          return t.document?.getFlag(this.ID, "actorId") === actorId;
+        } catch (e) {
+          console.warn(`${this.ID} | Error checking token:`, e);
+          return false;
+        }
+      });
 
       console.log(
         `${this.ID} | Found ${sameTypeTokens.length} tokens of same type`
       );
-      sameTypeTokens.forEach((t) => this._processTokenVisibility(t));
+
+      // Process all player changes before updating tokens
+      for (const playerId of playersToReveal) {
+        await this.learnMonsterType(tokenDocument, playerId);
+      }
+
+      for (const playerId of playersToUnreveal) {
+        await this.unlearnMonsterType(tokenDocument, playerId);
+      }
+
+      // Update each token's reveal state with error handling
+      for (const currentToken of sameTypeTokens) {
+        try {
+          if (!currentToken.document) continue;
+
+          const updates = {
+            [`flags.${this.ID}.${this.FLAGS.REVEALED}`]:
+              selectedPlayerIds.length > 0,
+            [`flags.${this.ID}.${this.FLAGS.REVEALED_TO}`]: selectedPlayerIds,
+          };
+
+          await currentToken.document.update(updates);
+
+          console.log(
+            `${this.ID} | Updated token:`,
+            currentToken.name,
+            updates
+          );
+        } catch (error) {
+          console.error(
+            `${this.ID} | Error updating token:`,
+            currentToken.name,
+            error
+          );
+        }
+      }
 
       // Update actor permissions with error handling
       if (token.actor) {
@@ -2246,15 +2272,13 @@ class ANewFoe {
   ) {
     try {
       // Create chat message
-      if (game.settings.get(this.ID, "sendPlayerChat")) {
-        await ChatMessage.create({
-          content: `${isRevealing ? token.name : "A token"} has been ${
-            isRevealing ? "revealed to" : "hidden from"
-          } you.`,
-          whisper: playerIds,
-          speaker: ChatMessage.getSpeaker({ alias: "System" }),
-        });
-      }
+      await ChatMessage.create({
+        content: `${token.name} has been ${
+          isRevealing ? "revealed to" : "hidden from"
+        } you.`,
+        whisper: playerIds,
+        speaker: ChatMessage.getSpeaker({ alias: "System" }),
+      });
 
       // Notify each player individually
       for (const playerId of playerIds) {
@@ -2346,7 +2370,6 @@ class ANewFoe {
   }
 
   static async learnMonsterType(tokenDocument, userId) {
-    // Remove reliance on REVEALED_TO token flag
     const actorId = tokenDocument.getFlag(this.ID, "actorId");
     if (!actorId) return;
 
@@ -2363,7 +2386,6 @@ class ANewFoe {
   }
 
   static async unlearnMonsterType(tokenDocument, userId) {
-    // Similarly, remove reliance on REVEALED_TO token flag
     const actorId = tokenDocument.getFlag(this.ID, "actorId");
     if (!actorId) return;
 
