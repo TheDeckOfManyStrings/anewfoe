@@ -1,8 +1,16 @@
-// Define RENDERED and CLOSING manually if not available in foundry.applications.ApplicationState
 const RENDERED = 2;
 const CLOSING = 3;
 
+/**
+ * Represents a FormApplication for applying DC modifiers.
+ * @extends FormApplication
+ */
 class DCModifiersConfig extends FormApplication {
+  /**
+   * Provides the default options.
+   * @override
+   * @returns {Object}
+   */
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       title: "DC Modifiers Configuration",
@@ -14,6 +22,11 @@ class DCModifiersConfig extends FormApplication {
     });
   }
 
+  /**
+   * Retrieves current DC modifiers for the template.
+   * @param {Object} options - Form options
+   * @returns {Object}
+   */
   getData(options) {
     const modifiers = game.settings.get("anewfoe", "dcModifiers");
     return {
@@ -25,6 +38,11 @@ class DCModifiersConfig extends FormApplication {
     };
   }
 
+  /**
+   * Called when the form is submitted to update settings.
+   * @param {Event} event - The form submission event
+   * @param {Object} formData - Form data
+   */
   async _updateObject(event, formData) {
     const modifiers = {};
     for (let [key, value] of Object.entries(formData)) {
@@ -37,8 +55,16 @@ class DCModifiersConfig extends FormApplication {
   }
 }
 
-// Add this new class near the top of the file, after other class definitions
+/**
+ * Provides a FormApplication for bulk-uploading monster knowledge.
+ * @extends FormApplication
+ */
 class BulkUploadConfig extends FormApplication {
+  /**
+   * Default application configuration options.
+   * @override
+   * @returns {Object}
+   */
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       title: "Bulk Upload Monster Knowledge",
@@ -50,6 +76,11 @@ class BulkUploadConfig extends FormApplication {
     });
   }
 
+  /**
+   * Prepares data for the bulk upload form.
+   * @param {Object} options - Form options
+   * @returns {Object}
+   */
   getData(options) {
     return {
       players: game.users
@@ -61,6 +92,11 @@ class BulkUploadConfig extends FormApplication {
     };
   }
 
+  /**
+   * Handles form submission for bulk uploading data.
+   * @param {Event} event - The form submission event
+   * @param {Object} formData - Submitted form data
+   */
   async _updateObject(event, formData) {
     try {
       const playerId = formData.playerId;
@@ -96,6 +132,11 @@ class BulkUploadConfig extends FormApplication {
     }
   }
 
+  /**
+   * Parses content from the provided JSON file or text area.
+   * @param {string} content - Raw JSON content
+   * @returns {Array} Array of monster names
+   */
   _parseMonsterList(content) {
     try {
       const data = JSON.parse(content);
@@ -113,6 +154,11 @@ class BulkUploadConfig extends FormApplication {
     }
   }
 
+  /**
+   * Processes the parsed list of monster names for a given player.
+   * @param {string} playerId - The player's ID
+   * @param {Array} monsterNames - List of monster names
+   */
   async _processMonsterList(playerId, monsterNames) {
     const learnedMonsters =
       game.settings.get("anewfoe", "learnedMonsters") || {};
@@ -132,6 +178,10 @@ class BulkUploadConfig extends FormApplication {
     await game.settings.set("anewfoe", "learnedMonsters", learnedMonsters);
   }
 
+  /**
+   * Wipes known monsters for the specified player.
+   * @param {string} playerId - The player's ID
+   */
   async _wipeKnownMonsters(playerId) {
     const learnedMonsters =
       game.settings.get("anewfoe", "learnedMonsters") || {};
@@ -146,6 +196,10 @@ class BulkUploadConfig extends FormApplication {
     }
   }
 
+  /**
+   * Activates HTML listeners for form operations.
+   * @param {jQuery} html - The JQuery-processed HTML of the form
+   */
   activateListeners(html) {
     super.activateListeners(html);
 
@@ -174,12 +228,18 @@ class BulkUploadConfig extends FormApplication {
   }
 }
 
-// Import the DCModifiersConfig class
-// import { DCModifiersConfig } from "./dc-modifiers-config.js";
-
+/**
+ * Displays monster info for a particular token.
+ * @extends Application
+ */
 class MonsterInfoDisplay extends Application {
   static instance = null;
 
+  /**
+   * Initializes the display for a given token.
+   * @param {Token} token - The token to display
+   * @param {Object} options - Optional config
+   */
   constructor(token, options = {}) {
     super(options);
     this.token = token;
@@ -187,6 +247,11 @@ class MonsterInfoDisplay extends Application {
     MonsterInfoDisplay.instance = this;
   }
 
+  /**
+   * Provides the default options for the display.
+   * @override
+   * @returns {Object}
+   */
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: "monster-info-display",
@@ -202,8 +267,11 @@ class MonsterInfoDisplay extends Application {
     });
   }
 
+  /**
+   * Retrieves stats and display data for the template.
+   * @returns {Object}
+   */
   async getData() {
-    // Get fresh data each time to ensure current state
     const revealedStats = game.settings.get(ANewFoe.ID, "revealedStats") || {};
     const actorId = this.token.document.getFlag(ANewFoe.ID, "actorId");
     const userId = game.user.id;
@@ -333,10 +401,19 @@ class MonsterInfoDisplay extends Application {
     };
   }
 
+  /**
+   * Formats numeric modifiers for display.
+   * @param {number} mod - Numeric modifier
+   * @returns {string}
+   */
   _getModifier(mod) {
     return mod >= 0 ? `+${mod}` : mod.toString();
   }
 
+  /**
+   * Computes DC values based on chosen calculation method.
+   * @returns {Object}
+   */
   _calculateDCs() {
     const method = game.settings.get(ANewFoe.ID, "dcCalculationMethod");
     const modifiers = game.settings.get(ANewFoe.ID, "dcModifiers");
@@ -371,7 +448,6 @@ class MonsterInfoDisplay extends Application {
         return defaultDCs;
     }
 
-    // Apply GM-specific adjustments
     const gmAdjustments =
       game.settings.get(ANewFoe.ID, "gmDCAdjustments") || {};
     for (const key in dcValues) {
@@ -383,9 +459,12 @@ class MonsterInfoDisplay extends Application {
     return dcValues;
   }
 
+  /**
+   * Calculates DC by Challenge Rating.
+   * @param {number} cr - The CR of the monster
+   * @returns {number}
+   */
   _calculateCRBasedDC(cr) {
-    // Non-linear scaling from 10 (CR 0) to 30 (CR 30)
-    // Using an exponential formula for smooth scaling
     const maxCR = 30;
     const minDC = 10;
     const maxDC = 30;
@@ -393,11 +472,15 @@ class MonsterInfoDisplay extends Application {
     return Math.round(scaledDC);
   }
 
+  /**
+   * Retrieves the current player's ability modifier for a stat.
+   * @param {string} ability - The ability key (e.g. "str", "dex")
+   * @returns {number}
+   */
   async getPlayerModifier(ability) {
     try {
       const userId = game.user.id;
 
-      // Get the user's assigned character from their profile
       const user = game.users.get(userId);
       if (!user?.character) {
         return 0;
@@ -412,6 +495,11 @@ class MonsterInfoDisplay extends Application {
     }
   }
 
+  /**
+   * Activates listeners for interactive stat rolling.
+   * @override
+   * @param {jQuery} html - JQuery HTML element
+   */
   activateListeners(html) {
     super.activateListeners(html);
 
@@ -421,7 +509,6 @@ class MonsterInfoDisplay extends Application {
         const key = button.dataset.key;
         const dc = parseInt(button.dataset.dc);
 
-        // Prevent multiple requests for the same stat
         const isPending = ANewFoe.isRequestPending(
           game.user.id,
           this.actor.id,
@@ -441,7 +528,6 @@ class MonsterInfoDisplay extends Application {
         );
 
         if (requireApproval && !game.user.isGM) {
-          // Send request to GM and wait for approval
           game.socket.emit(`module.${ANewFoe.ID}`, {
             type: "requestStatRoll",
             userId: game.user.id,
@@ -451,7 +537,6 @@ class MonsterInfoDisplay extends Application {
             dc: dc,
             usePlayerStats: usePlayerStats,
           });
-          // Mark request as pending after sending to GM
           ANewFoe.addPendingRequest(game.user.id, this.actor.id, key);
           ui.notifications.info(
             "Your request to discover the stat has been sent to the GM for approval."
@@ -459,7 +544,6 @@ class MonsterInfoDisplay extends Application {
           return;
         }
 
-        // If no approval needed or is GM, process roll immediately
         await this.processApprovedStatRoll({
           key: key,
           dc: dc,
@@ -472,33 +556,37 @@ class MonsterInfoDisplay extends Application {
     });
   }
 
-  static isAbilityCheck(key) {
-    const isAbility = ["str", "dex", "con", "int", "wis", "cha"].includes(key);
-    return isAbility;
-  }
-
+  /**
+   * Re-renders the application to update data.
+   */
   async refresh() {
     await this.render(true);
   }
 
+  /**
+   * Sets the position of this window.
+   * @override
+   * @param {Object} options - Positioning options
+   */
   setPosition(options = {}) {
-    // Get saved position from settings
     const savedPosition = game.settings.get(ANewFoe.ID, "monsterInfoPosition");
     if (savedPosition) {
       options = foundry.utils.mergeObject(savedPosition, options);
     }
 
-    // Call parent class setPosition
     return super.setPosition(options);
   }
 
+  /**
+   * Closes the display and saves position settings.
+   * @override
+   * @param {Object} options - Close options
+   */
   async close(options = {}) {
-    // Save the current position before closing
     if (this.position) {
       await game.settings.set(ANewFoe.ID, "monsterInfoPosition", this.position);
     }
 
-    // Clear the instance reference before closing
     if (MonsterInfoDisplay.instance === this) {
       MonsterInfoDisplay.instance = null;
     }
@@ -506,11 +594,21 @@ class MonsterInfoDisplay extends Application {
     return super.close(options);
   }
 
+  /**
+   * Renders the display, applying any stored position info.
+   * @override
+   * @param {boolean} force - Force render
+   * @param {Object} options - Rendering options
+   */
   async _render(force = false, options = {}) {
     await super._render(force, options);
     this.setPosition();
   }
 
+  /**
+   * Processes a stat roll once approved by the GM.
+   * @param {Object} data - Data needed to execute the roll
+   */
   async processApprovedStatRoll(data) {
     try {
       const key = data.key;
@@ -518,7 +616,6 @@ class MonsterInfoDisplay extends Application {
       const usePlayerStats = data.usePlayerStats;
       const actorId = data.actorId;
 
-      // Remove the pending request after processing the roll
       ANewFoe.removePendingRequest(game.user.id, actorId, key);
 
       let rollFormula = "1d20";
@@ -532,13 +629,11 @@ class MonsterInfoDisplay extends Application {
         }
       }
 
-      // Create and evaluate roll
       const roll = new Roll(rollFormula);
       await roll.evaluate();
 
       const total = roll.total;
 
-      // Send chat message for the roll
       await ChatMessage.create({
         flavor: `Attempting to discern ${key.toUpperCase()}...`,
         speaker: ChatMessage.getSpeaker(),
@@ -548,7 +643,6 @@ class MonsterInfoDisplay extends Application {
       });
 
       if (total >= dc) {
-        // Send message to GM to reveal the stat
         game.socket.emit(`module.${ANewFoe.ID}`, {
           type: "revealStat",
           userId: game.user.id,
@@ -562,8 +656,21 @@ class MonsterInfoDisplay extends Application {
       ui.notifications.error("There was an error processing the roll.");
     }
   }
+
+  /**
+   * Checks if a stat key represents an ability check.
+   * @param {string} key - The stat key
+   * @returns {boolean}
+   */
+  static isAbilityCheck(key) {
+    const isAbility = ["str", "dex", "con", "int", "wis", "cha"].includes(key);
+    return isAbility;
+  }
 }
 
+/**
+ * Manages knowledge and reveal logic for monsters.
+ */
 class ANewFoe {
   static ID = "anewfoe";
 
@@ -590,31 +697,32 @@ class ANewFoe {
 
   static PENDING_REQUESTS = [];
 
-  // Add new properties after other static properties
   static TIMEOUTS = new Map();
 
+  /**
+   * Initializes module settings and hooks on game ready.
+   */
   static initialize() {
     this.registerSettings();
     this.registerHooks();
     this.setupSocket();
 
-    // Load pending requests from settings
     this.loadPendingRequests();
 
-    // If player, check with GM for pending requests
     if (!game.user.isGM) {
       this.syncPendingRequestsWithGM();
     }
 
-    // Create GM UI immediately if user is GM and stat reveal is enabled
     if (game.user.isGM && game.settings.get(this.ID, "enableStatReveal")) {
       this.createGMApprovalUI();
-      this.updateGMApprovalUI(); // Add this line to populate the UI on initialization
+      this.updateGMApprovalUI();
     }
   }
 
+  /**
+   * Requests the GM to synchronize pending monster knowledge requests with this user.
+   */
   static syncPendingRequestsWithGM() {
-    // Add a slight delay to ensure socket is ready
     setTimeout(() => {
       game.socket.emit(`module.${this.ID}`, {
         type: "requestPendingSync",
@@ -623,23 +731,31 @@ class ANewFoe {
     }, 500);
   }
 
+  /**
+   * Loads pending requests from stored settings and updates the GM approval UI.
+   */
   static loadPendingRequests() {
     const storedRequests = game.settings.get(this.ID, "pendingRequests") || [];
     this.PENDING_REQUESTS = storedRequests;
     this.updateGMApprovalUI();
   }
 
+  /**
+   * Persists current pending requests into world settings.
+   */
   static savePendingRequests() {
     if (game.user.isGM) {
       game.settings.set(this.ID, "pendingRequests", this.PENDING_REQUESTS);
     }
   }
 
+  /**
+   * Sets up socket listeners and message handling for monster reveal and stat checks.
+   */
   static setupSocket() {
     const socketName = `module.${this.ID}`;
 
-    // Remove any existing listeners to prevent duplicates
-    game.socket.off(socketName); // Ensure old listeners are removed
+    game.socket.off(socketName);
 
     game.socket.on(socketName, async (data, ack) => {
       await this.handleSocketMessage(data);
@@ -647,6 +763,10 @@ class ANewFoe {
     });
   }
 
+  /**
+   * Primary handler for all incoming socket messages related to monster knowledge.
+   * @param {Object} data - The data object received over the socket
+   */
   static async handleSocketMessage(data) {
     try {
       const messageKey = `${data.userId}-${data.key}-${data.actorId}`;
@@ -687,7 +807,6 @@ class ANewFoe {
           break;
         case "statRollApproved":
           if (game.user.id === data.userId) {
-            // Process the roll directly instead of requiring display instance
             await this.processStatRoll(data);
           }
           break;
@@ -701,12 +820,10 @@ class ANewFoe {
           break;
         case "statRollRejected":
           if (game.user.id === data.userId) {
-            // Remove the pending request when rejected
             ANewFoe.removePendingRequest(data.userId, data.actorId, data.key);
             ui.notifications.info("Your request was rejected by the GM.");
           }
           if (game.user.isGM) {
-            // Remove pending request and update UI
             this.removePendingRequest(data.userId, data.actorId, data.key);
           }
           break;
@@ -737,12 +854,10 @@ class ANewFoe {
 
         case "pendingRequestsSync":
           if (game.user.id === data.userId && data.requests) {
-            // Only update requests for the current player
             this.PENDING_REQUESTS = data.requests.filter(
               (req) => req.userId === game.user.id
             );
 
-            // If we have any pending requests, update the display
             if (MonsterInfoDisplay.instance) {
               await MonsterInfoDisplay.instance.refresh();
             }
@@ -750,7 +865,6 @@ class ANewFoe {
           break;
         case "monsterRevealed":
           if (game.user.id === data.userId) {
-            // Update learned monsters if revealed
             if (data.isRevealed) {
               const learnedMonsters =
                 game.settings.get(this.ID, "learnedMonsters") || {};
@@ -766,7 +880,6 @@ class ANewFoe {
               }
             }
 
-            // Refresh affected tokens
             for (const tokenId of data.tokenIds) {
               const token = canvas.tokens.get(tokenId);
               if (token) {
@@ -779,7 +892,6 @@ class ANewFoe {
               }
             }
 
-            // Refresh any open monster info display
             if (MonsterInfoDisplay.instance) {
               await MonsterInfoDisplay.instance.refresh();
             }
@@ -791,25 +903,31 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Applies flags to a token once the GM approves reveal.
+   * @param {Object} data - Token-related data
+   */
   static async handleSetTokenFlags(data) {
     if (!game.user.isGM) return;
 
     try {
       const token = canvas.tokens.get(data.tokenId);
       if (!token) return;
-      // Remove references to REVEALED_TO and rely on learnedMonsters
       await ANewFoe.learnMonsterType(token.document, data.userId);
     } catch (error) {
       console.error(`${this.ID} | Error setting token flags:`, error);
     }
   }
 
+  /**
+   * Manages a newly revealed stat for a specific user.
+   * @param {Object} data - Data about the revealed stat
+   */
   static async handleStatRevealed(data) {
     try {
       const messageKey = `${data.userId}-${data.key}-${data.actorId}`;
       const now = Date.now();
 
-      // Check if we've handled this message recently
       if (
         this.DEBOUNCE.lastReveal[messageKey] &&
         now - this.DEBOUNCE.lastReveal[messageKey] < this.DEBOUNCE.TIMEOUT
@@ -827,6 +945,10 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Reveals stats server-side if GM is present.
+   * @param {Object} data - Data about which stat to reveal
+   */
   static async handleStatReveal(data) {
     if (!game.user.isGM) return;
 
@@ -842,7 +964,6 @@ class ANewFoe {
         revealedStats[statKey].push(data.key);
         await game.settings.set(this.ID, "revealedStats", revealedStats);
 
-        // Send confirmation back to player
         game.socket.emit(`module.${this.ID}`, {
           type: "statRevealed",
           userId: data.userId,
@@ -855,10 +976,13 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Handles a player's request to roll for monster info.
+   * @param {Object} data - Relevant roll request data
+   */
   static async handleStatRollRequest(data) {
     if (!game.user.isGM) return;
 
-    // Ensure GM UI exists and is rendered
     if (!GMQueueApplication.instance) {
       this.createGMApprovalUI();
     } else if (GMQueueApplication.instance._state !== RENDERED) {
@@ -872,7 +996,6 @@ class ANewFoe {
     const usePlayerStats = data.usePlayerStats;
     const tokenId = data.tokenId;
 
-    // Add the request to the pending list with all needed data
     this.PENDING_REQUESTS.push({
       userId: data.userId,
       actorId: data.actorId,
@@ -882,31 +1005,24 @@ class ANewFoe {
       usePlayerStats: data.usePlayerStats,
     });
 
-    // Save pending requests
     this.savePendingRequests();
 
-    // Update the queue UI
     this.updateGMApprovalUI();
 
-    // Show the GM queue window if it was closed
     if (!GMQueueApplication.instance) {
       this.createGMApprovalUI();
     }
 
-    // Set up auto-reject timer if enabled
     if (game.settings.get(this.ID, "enableAutoReject")) {
       const timeoutMinutes = game.settings.get(this.ID, "autoRejectTimer");
       const timeoutMs = timeoutMinutes * 60 * 1000;
       const timeoutKey = `${data.userId}-${data.actorId}-${data.key}`;
 
-      // Clear any existing timeout for this request
       if (this.TIMEOUTS.has(timeoutKey)) {
         clearTimeout(this.TIMEOUTS.get(timeoutKey));
       }
 
-      // Set new timeout
       const timeout = setTimeout(() => {
-        // Check if request still exists before auto-rejecting
         if (
           this.PENDING_REQUESTS.some(
             (req) =>
@@ -929,28 +1045,39 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Processes an approved roll for the requesting player.
+   * @param {Object} data - Roll data
+   */
   static async handleStatRollApproved(data) {
     if (game.user.id !== data.userId) return;
     const display = MonsterInfoDisplay.instance;
     if (display) {
-      // Proceed with the roll
       await display.processApprovedStatRoll(data);
     }
   }
 
+  /**
+   * Informs a player that their roll request was rejected.
+   * @param {Object} data - Request data
+   */
   static async handleStatRollRejected(data) {
     if (game.user.id !== data.userId) return;
     const display = MonsterInfoDisplay.instance;
     if (display) {
-      // Remove the pending request when rejected
       ANewFoe.removePendingRequest(data.userId, display.actor.id, data.key);
       ui.notifications.info("Your request was rejected by the GM.");
     }
   }
 
+  /**
+   * Submits a new pending request to reveal or roll stats.
+   * @param {string} userId - Player user ID
+   * @param {string} actorId - The actor's ID
+   * @param {string} statKey - The stat being requested
+   */
   static addPendingRequest(userId, actorId, statKey) {
     if (game.user.isGM) {
-      // Prevent duplicate requests
       const exists = this.PENDING_REQUESTS.some(
         (req) =>
           req.userId === userId &&
@@ -962,7 +1089,6 @@ class ANewFoe {
         this.savePendingRequests();
         this.updateGMApprovalUI();
 
-        // Notify the specific player about their pending request
         game.socket.emit(`module.${this.ID}`, {
           type: "pendingRequestsSync",
           userId: userId,
@@ -972,7 +1098,6 @@ class ANewFoe {
         });
       }
     } else {
-      // Player sends a socket message to GM to add the pending request
       game.socket.emit(`module.${this.ID}`, {
         type: "addPendingRequest",
         userId,
@@ -982,16 +1107,20 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Removes a pending request if found in the queue.
+   * @param {string} userId - Player user ID
+   * @param {string} actorId - Actor ID
+   * @param {string} statKey - Stat being requested
+   */
   static removePendingRequest(userId, actorId, statKey) {
     if (game.user.isGM) {
-      // Clear auto-reject timeout if it exists
       const timeoutKey = `${userId}-${actorId}-${statKey}`;
       if (this.TIMEOUTS.has(timeoutKey)) {
         clearTimeout(this.TIMEOUTS.get(timeoutKey));
         this.TIMEOUTS.delete(timeoutKey);
       }
 
-      // Remove the request and update the UI
       const initialLength = this.PENDING_REQUESTS.length;
       this.PENDING_REQUESTS = this.PENDING_REQUESTS.filter(
         (req) =>
@@ -1007,7 +1136,6 @@ class ANewFoe {
         this.updateGMApprovalUI();
       }
     } else {
-      // Player sends a socket message to GM to remove the pending request
       game.socket.emit(`module.${this.ID}`, {
         type: "removePendingRequest",
         userId,
@@ -1017,8 +1145,14 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Checks if a request is currently pending.
+   * @param {string} userId - Player user ID
+   * @param {string} actorId - The actor's ID
+   * @param {string} statKey - The stat in question
+   * @returns {boolean}
+   */
   static isRequestPending(userId, actorId, statKey) {
-    // Players read the pending requests from settings
     const pendingRequests = game.settings.get(this.ID, "pendingRequests") || [];
 
     return pendingRequests.some(
@@ -1029,6 +1163,9 @@ class ANewFoe {
     );
   }
 
+  /**
+   * Creates the GM approval UI if user is the game master.
+   */
   static createGMApprovalUI() {
     if (!game.user.isGM || GMQueueApplication.instance) return;
 
@@ -1036,6 +1173,9 @@ class ANewFoe {
     queue.render(true);
   }
 
+  /**
+   * Updates the GM approval UI with current requests.
+   */
   static updateGMApprovalUI() {
     if (!game.user.isGM) return;
 
@@ -1046,8 +1186,10 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Registers all relevant settings for this module.
+   */
   static registerSettings() {
-    // Core display settings
     game.settings.register(this.ID, "hideStyle", {
       name: "Monster Hiding Style",
       hint: "Choose how unidentified monsters appear to players",
@@ -1061,7 +1203,6 @@ class ANewFoe {
       requiresReload: true,
     });
 
-    // Add new setting to control stat reveal feature
     game.settings.register(this.ID, "enableStatReveal", {
       name: "Enable Stat Reveal",
       hint: "If enabled, players can reveal monster stats after the monster has been revealed.",
@@ -1081,7 +1222,6 @@ class ANewFoe {
       requiresReload: true,
     });
 
-    // State persistence settings
     game.settings.register(this.ID, "learnedMonsters", {
       name: "Learned Monsters",
       hint: "Monsters that players have learned about",
@@ -1100,7 +1240,6 @@ class ANewFoe {
       default: {},
     });
 
-    // Additional metadata settings
     game.settings.register(this.ID, "learnedMonsterInfo", {
       name: "Monster Knowledge Details",
       hint: "Detailed information about monster knowledge",
@@ -1157,7 +1296,6 @@ class ANewFoe {
       config: true,
     });
 
-    // Register the submenu
     game.settings.registerMenu(this.ID, "dcModifiersMenu", {
       name: "DC Modifiers",
       label: "Modify DC Values",
@@ -1167,7 +1305,6 @@ class ANewFoe {
       restricted: true,
     });
 
-    // If "fixedValue" is selected, provide an input for the fixed DC
     game.settings.register(this.ID, "fixedDCValue", {
       name: "Fixed DC Value",
       hint: "Set the fixed DC value for all stat checks when using Fixed DC method.",
@@ -1187,7 +1324,6 @@ class ANewFoe {
       default: true,
     });
 
-    // Register setting to store pending requests
     game.settings.register(this.ID, "pendingRequests", {
       name: "Pending Requests",
       scope: "world",
@@ -1196,7 +1332,6 @@ class ANewFoe {
       default: [],
     });
 
-    // Add new settings for auto-reject
     game.settings.register(this.ID, "enableAutoReject", {
       name: "Enable Auto-Reject",
       hint: "Automatically reject stat check requests after a specified time",
@@ -1238,7 +1373,6 @@ class ANewFoe {
       },
     });
 
-    // Add the bulk upload menu
     game.settings.registerMenu(this.ID, "bulkUploadMenu", {
       name: "Bulk Upload Monster Knowledge",
       label: "Bulk Upload",
@@ -1248,7 +1382,6 @@ class ANewFoe {
       restricted: true,
     });
 
-    // Add new settings for window positions
     game.settings.register(this.ID, "monsterInfoPosition", {
       scope: "client",
       config: false,
@@ -1273,8 +1406,10 @@ class ANewFoe {
     });
   }
 
+  /**
+   * Registers system hooks and modifies token behavior.
+   */
   static registerHooks() {
-    // Store original data when GM creates token
     Hooks.on("preCreateToken", (document, data, options, userId) => {
       if (game.user.isGM) {
         const originalData = {
@@ -1288,19 +1423,16 @@ class ANewFoe {
       }
     });
 
-    // Process new tokens
     Hooks.on("createToken", async (document, options, userId) => {
       if (!game.user.isGM) {
         const token = document.object;
         const actorId = document.getFlag(this.ID, "actorId");
 
-        // Check if this monster type is already learned
         const learnedMonsters =
           game.settings.get(this.ID, "learnedMonsters") || {};
         const isLearned = learnedMonsters[game.user.id]?.includes(actorId);
 
         if (isLearned) {
-          // Request GM to set flags instead of setting them directly
           game.socket.emit(`module.${this.ID}`, {
             type: "setTokenFlags",
             tokenId: token.id,
@@ -1319,12 +1451,9 @@ class ANewFoe {
       }
     });
 
-    // Handle canvas ready
     Hooks.on("canvasReady", async () => {
-      // Add a small delay to ensure all tokens are fully loaded
       await new Promise((resolve) => setTimeout(resolve, 200));
 
-      // Process all tokens in the scene
       for (const token of canvas.tokens.placeables) {
         try {
           if (
@@ -1337,9 +1466,15 @@ class ANewFoe {
           const isKnown = this.isMonsterTypeKnown(token.document);
           const isRevealed = this.isMonsterRevealed(token.document);
 
-          // Ensure token is properly initialized
           if (!token.mesh || !token.mesh.texture) {
             await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+
+          if (!token.mesh || !token.mesh.texture) {
+            console.warn(
+              `${this.ID} | Token mesh not available, skipping visibility processing`
+            );
+            return;
           }
 
           if (game.user.isGM) {
@@ -1360,17 +1495,9 @@ class ANewFoe {
         }
       }
 
-      // Force a canvas update to ensure all changes are applied
       canvas.tokens.render();
     });
 
-    // Add a new hook for scene loading
-    Hooks.on("preLoadScene", (scene, data) => {
-      // Clear any existing operations flag to ensure fresh processing
-      this.OPERATIONS.PROCESSING_VISIBILITY = false;
-    });
-
-    // Handle refreshToken
     Hooks.on("refreshToken", async (token) => {
       if (!game.user.isGM) {
         if (
@@ -1386,33 +1513,27 @@ class ANewFoe {
         if (isKnown || isRevealed) {
           ANewFoe._makeTokenClickable(token);
         } else if (!token.document.hidden) {
-          // Apply silhouette effect immediately
           if (token.mesh) {
             token.mesh.tint = 0x000000;
             token.mesh.alpha = 1;
           }
-          // Restore token visibility
           token.alpha = 1;
         }
       } else if (token?.document?.flags) {
-        // Ensure GM overlays are maintained
         setTimeout(() => {
           this.updateTokenOverlay(token);
         }, 100);
       }
     });
 
-    // Enhance the updateToken hook
     Hooks.on("updateToken", async (document, changes, options, userId) => {
       const token = document.object;
       if (!game.user.isGM && token) {
-        // Check if this update includes a hidden state change
         if (changes.hasOwnProperty("hidden")) {
           const isKnown = ANewFoe.isMonsterTypeKnown(document);
           const isRevealed = ANewFoe.isMonsterRevealed(document);
 
           if (!isKnown && !isRevealed) {
-            // Only process if token is becoming visible
             if (!changes.hidden) {
               await ANewFoe._processTokenVisibility(token);
             }
@@ -1430,24 +1551,20 @@ class ANewFoe {
       }
     });
 
-    // Draw overlays for GM
     Hooks.on("drawToken", (token) => {
       if (game.user.isGM) {
         setTimeout(() => ANewFoe.updateTokenOverlay(token), 100);
       }
     });
 
-    // Token updates
     Hooks.on("updateToken", (document, changes, options, userId) => {
       const token = document.object;
       if (!game.user.isGM && token) {
-        // Check if this update includes a hidden state change
         if (changes.hasOwnProperty("hidden")) {
           const isKnown = ANewFoe.isMonsterTypeKnown(document);
           const isRevealed = ANewFoe.isMonsterRevealed(document);
 
           if (!isKnown && !isRevealed) {
-            // If token becomes visible, ensure silhouette is applied
             if (!changes.hidden) {
               ANewFoe._processTokenVisibility(token);
             }
@@ -1471,7 +1588,6 @@ class ANewFoe {
       }
     });
 
-    // Add new hook to catch transitions
     Hooks.on("preUpdateToken", (document, changes, options, userId) => {
       if (!game.user.isGM && changes.hidden === false) {
         const token = document.object;
@@ -1480,7 +1596,6 @@ class ANewFoe {
           !ANewFoe.isMonsterTypeKnown(document) &&
           !ANewFoe.isMonsterRevealed(document)
         ) {
-          // Cancel any existing transition
           if (token._alphaTransition) {
             token._alphaTransition.cancel();
             token._alphaTransition = null;
@@ -1489,7 +1604,6 @@ class ANewFoe {
       }
     });
 
-    // Add or modify preUpdateToken hook
     Hooks.on("preUpdateToken", (document, changes, options, userId) => {
       if (!game.user.isGM && changes.hidden === false) {
         const token = document.object;
@@ -1498,14 +1612,12 @@ class ANewFoe {
           !ANewFoe.isMonsterTypeKnown(document) &&
           !ANewFoe.isMonsterRevealed(document)
         ) {
-          // Override the animation temporarily
           const originalTransition = token._animateVisibility;
           token._animateVisibility = () => {
             token.alpha = 1;
             return Promise.resolve(true);
           };
 
-          // Restore after a short delay
           setTimeout(() => {
             token._animateVisibility = originalTransition;
           }, 100);
@@ -1513,7 +1625,6 @@ class ANewFoe {
       }
     });
 
-    // Add this new hook at the very beginning of visibility changes
     Hooks.on(
       "preUpdateToken",
       (document, changes, options, userId) => {
@@ -1524,27 +1635,23 @@ class ANewFoe {
             !ANewFoe.isMonsterTypeKnown(document) &&
             !ANewFoe.isMonsterRevealed(document)
           ) {
-            // Block standard visibility animation
             if (token._animation) token._animation.kill();
             if (token._alphaTransition) token._alphaTransition.kill();
 
-            // Apply silhouette effect immediately
             if (token.mesh) {
               token.mesh.tint = 0x000000;
               token.mesh.alpha = 1;
             }
 
-            // Force immediate full visibility
             token.alpha = 1;
             if (token.mesh) token.mesh.alpha = 1;
 
-            // Prevent default animation
             options.animation = false;
           }
         }
       },
       { priority: 100 }
-    ); // High priority to run before other hooks
+    );
 
     Hooks.on("canvasReady", () => {
       if (game.user.isGM) {
@@ -1554,7 +1661,6 @@ class ANewFoe {
       }
     });
 
-    // Clean up when the game closes
     Hooks.on("closeApplication", () => {
       if (this.gmApprovalUI) {
         this.gmApprovalUI.remove();
@@ -1562,7 +1668,6 @@ class ANewFoe {
       }
     });
 
-    // Modify the Token HUD to handle multiple selected tokens
     Hooks.on("renderTokenHUD", (app, html, data) => {
       if (game.user.isGM) {
         const button = $(`<div class="control-icon anewfoe-reveal">
@@ -1584,28 +1689,27 @@ class ANewFoe {
     });
   }
 
+  /**
+   * Makes a token clickable for reveal or info.
+   * @param {Token} token - The token to modify
+   */
   static _makeTokenClickable(token) {
     try {
       if (!token || !token.actor) {
         return;
       }
 
-      // Enable interaction
       token.interactive = true;
       token.buttonMode = true;
 
-      // Set up click handling
       if (token.mouseInteractionManager) {
-        // Replace the entire click handler setup with this:
         token.mouseInteractionManager.permissions.clickLeft = true;
         token.mouseInteractionManager.callbacks.clickLeft = async (event) => {
           try {
-            // Prevent the default token click behavior
             event.preventDefault();
             event.stopPropagation();
 
             const userId = game.user.id;
-            // Add null check for actor
             if (!token.actor) {
               console.warn(
                 `${this.ID} | Actor not available for token:`,
@@ -1616,12 +1720,10 @@ class ANewFoe {
 
             const userPermissionLevel = token.actor.getUserLevel(userId);
 
-            // Only show token HUD if user is owner
             if (userPermissionLevel >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER) {
               return token._onClickLeft(event);
             }
 
-            // For all other permission levels, show our custom UI if revealed
             if (ANewFoe.isMonsterRevealed(token.document)) {
               if (game.settings.get(ANewFoe.ID, "enableStatReveal")) {
                 await ANewFoe.showTokenInfo(token);
@@ -1632,7 +1734,6 @@ class ANewFoe {
           }
         };
 
-        // Block other interactions for non-owners
         if (
           token.actor &&
           token.actor.getUserLevel(game.user.id) <
@@ -1645,7 +1746,6 @@ class ANewFoe {
         }
       }
 
-      // Add event listener for double right-click to target the token
       token.on("rightdown", (event) => {
         if (event.data.originalEvent.detail === 2) {
           token.setTarget(!token.isTargeted, { releaseOthers: false });
@@ -1656,18 +1756,20 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Opens or updates the MonsterInfoDisplay window.
+   * @param {Token} token - The token for which to show info
+   */
   static async showTokenInfo(token) {
     if (!ANewFoe.isMonsterRevealed(token.document)) {
       return;
     }
 
     try {
-      // If instance exists but is closing, wait for it to finish
       if (MonsterInfoDisplay.instance?._state === CLOSING) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
-      // If same window exists and is rendered, bring to front
       if (
         MonsterInfoDisplay.instance?.token.id === token.id &&
         MonsterInfoDisplay.instance._state === RENDERED
@@ -1676,13 +1778,11 @@ class ANewFoe {
         return;
       }
 
-      // Close any existing window
       if (MonsterInfoDisplay.instance) {
         await MonsterInfoDisplay.instance.close();
         MonsterInfoDisplay.instance = null;
       }
 
-      // Create and render new window
       const display = new MonsterInfoDisplay(token);
       await display.render(true);
     } catch (error) {
@@ -1690,11 +1790,13 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Creates a black silhouette overlay for hidden monsters.
+   * @param {Token} token - The token to modify
+   */
   static _createSimpleSilhouette(token) {
-    // Remove any existing overlay
     ANewFoe._removeBlackOverlay(token);
 
-    // Create simple black background
     const background = new PIXI.Graphics();
     background.beginFill(0x000000, 1);
     background.drawRect(0, 0, token.w, token.h);
@@ -1705,22 +1807,22 @@ class ANewFoe {
     token.blackOverlay = background;
   }
 
+  /**
+   * Creates an animated overlay for hidden tokens.
+   * @param {Token} token - The token to modify
+   */
   static _createAnimatedOverlay(token) {
-    // Remove any existing overlay first
     ANewFoe._removeBlackOverlay(token);
 
-    // Create container for overlay elements
     const container = new PIXI.Container();
     container.zIndex = 999;
 
-    // Create black background
     const background = new PIXI.Graphics();
     background.beginFill(0x000000, 1);
     background.drawRect(0, 0, token.w, token.h);
     background.endFill();
     container.addChild(background);
 
-    // Create question mark text with enhanced visibility
     const questionMark = new PIXI.Text("?", {
       fontFamily: "Arial",
       fontSize: Math.min(token.w, token.h) * 0.8,
@@ -1738,7 +1840,6 @@ class ANewFoe {
     questionMark.position.set(token.w / 2, token.h / 2);
     container.addChild(questionMark);
 
-    // Enhanced animation
     let animationFrame;
     const animate = () => {
       const time = Date.now() / 500;
@@ -1756,9 +1857,12 @@ class ANewFoe {
     token.blackOverlay = container;
   }
 
+  /**
+   * Removes any black overlay from a token.
+   * @param {Token} token - The token
+   */
   static async _removeBlackOverlay(token) {
     if (token.blackOverlay) {
-      // Cancel animation frame if it exists
       if (token.blackOverlay.animationFrame) {
         cancelAnimationFrame(token.blackOverlay.animationFrame);
       }
@@ -1767,6 +1871,10 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Processes token visibility for hidden or revealed states.
+   * @param {Token} token - The token object
+   */
   static async _processTokenVisibility(token) {
     if (!token || !token.document) {
       console.warn(`${this.ID} | Invalid token for visibility processing`);
@@ -1781,12 +1889,10 @@ class ANewFoe {
 
     try {
       if (!token.document.hidden) {
-        // Ensure token is initialized
         if (!token.mesh || !token.mesh.texture) {
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
 
-        // Only proceed if the token is still valid
         if (!token.mesh || !token.mesh.texture) {
           console.warn(
             `${this.ID} | Token mesh not available, skipping visibility processing`
@@ -1794,15 +1900,12 @@ class ANewFoe {
           return;
         }
 
-        // Force token to be visible first
         token.visible = true;
         token.alpha = 1;
 
-        // Apply silhouette effect
         token.mesh.tint = 0x000000;
         token.mesh.alpha = 1;
 
-        // Update text display if available
         if (token.text) {
           token.text.text = "Unknown Creature";
           token.text.visible = true;
@@ -1810,20 +1913,17 @@ class ANewFoe {
           await token.text.draw();
         }
 
-        // Ensure non-interactive for players
         if (!game.user.isGM) {
           token.interactive = false;
           token.buttonMode = false;
         }
 
-        // Force token refresh safely
         if (token.mesh && token.mesh.texture) {
           await token.refresh();
         }
       }
     } catch (error) {
       console.error(`${this.ID} | Error processing token visibility:`, error);
-      // Ensure token is visible in case of error
       if (token) {
         token.alpha = 1;
         token.visible = true;
@@ -1833,6 +1933,10 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Restores the original token appearance post-reveal.
+   * @param {Token} token - The token object
+   */
   static async _restoreTokenAppearance(token) {
     try {
       const originalTint = token.document.getFlag(this.ID, "originalTint");
@@ -1847,46 +1951,14 @@ class ANewFoe {
     }
   }
 
-  static async showTokenInfo(token) {
-    if (!ANewFoe.isMonsterRevealed(token.document)) {
-      return;
-    }
-
-    try {
-      // If instance exists but is closing, wait for it to finish
-      if (MonsterInfoDisplay.instance?._state === CLOSING) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
-      // If same window exists and is rendered, bring to front
-      if (
-        MonsterInfoDisplay.instance?.token.id === token.id &&
-        MonsterInfoDisplay.instance._state === RENDERED
-      ) {
-        MonsterInfoDisplay.instance.bringToTop();
-        return;
-      }
-
-      // Close any existing window
-      if (MonsterInfoDisplay.instance) {
-        await MonsterInfoDisplay.instance.close();
-        MonsterInfoDisplay.instance = null;
-      }
-
-      // Create and render new window
-      const display = new MonsterInfoDisplay(token);
-      await display.render(true);
-    } catch (error) {
-      console.error(`${this.ID} | Error showing token info:`, error);
-    }
-  }
-
-  // GM overlay system
+  /**
+   * Updates or draws GM overlays if user is GM.
+   * @param {Token} token - The token to overlay
+   */
   static async updateTokenOverlay(token) {
     if (!game.user.isGM || !token?.document?.flags) return;
 
     try {
-      // Clean up existing overlay
       if (token.revealOverlay) {
         if (
           token.revealOverlay.destroy &&
@@ -1898,14 +1970,12 @@ class ANewFoe {
         token.revealOverlay = null;
       }
 
-      // Get non-GM players
       const players = game.users.filter((u) => !u.isGM && u.active);
       if (players.length === 0) return;
 
       const actorId = token.document.getFlag(this.ID, "actorId");
       if (!actorId) return;
 
-      // Calculate how many players know this monster
       const knownCount = players.reduce((count, player) => {
         const learnedMonsters =
           game.settings.get(this.ID, "learnedMonsters") || {};
@@ -1918,10 +1988,8 @@ class ANewFoe {
         return count + (knows ? 1 : 0);
       }, 0);
 
-      // Create new overlay
       const overlay = new PIXI.Container();
 
-      // Draw the indicator circle
       const graphics = new PIXI.Graphics();
       const radius = Math.min(token.w, token.h) * 0.05;
       const color =
@@ -1938,7 +2006,6 @@ class ANewFoe {
 
       overlay.addChild(graphics);
 
-      // Add count text if some but not all players know
       if (knownCount > 0 && knownCount < players.length) {
         const text = new PIXI.Text(knownCount.toString(), {
           fontSize: radius * 1.5,
@@ -1950,12 +2017,10 @@ class ANewFoe {
         overlay.addChild(text);
       }
 
-      // Add overlay to token
       token.addChild(overlay);
       token.revealOverlay = overlay;
       overlay.zIndex = 999;
 
-      // Force token to sort its children
       token.sortableChildren = true;
       token.sortChildren();
     } catch (error) {
@@ -1963,21 +2028,23 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Reveals a monster for selected players.
+   * @param {Token} token - The monster token
+   * @param {string[]} selectedPlayerIds - Player IDs
+   */
   static async revealMonster(token, selectedPlayerIds) {
     try {
       const actorId = token.document.getFlag(this.ID, "actorId");
-      // Use learnedMonsters instead of token flags
       const learnedMonsters =
         game.settings.get(this.ID, "learnedMonsters") || {};
       const currentlyKnown = learnedMonsters[selectedPlayerIds[0]] || [];
 
-      // Get all players that already know this actor
       const allPlayers = game.users.filter((u) => !u.isGM).map((u) => u.id);
       const revealedTo = allPlayers.filter((pid) => {
         return (learnedMonsters[pid] || []).includes(actorId);
       });
 
-      // Determine reveal/unreveal sets
       const playersToReveal = selectedPlayerIds.filter(
         (p) => !revealedTo.includes(p)
       );
@@ -1985,24 +2052,20 @@ class ANewFoe {
         (p) => !selectedPlayerIds.includes(p)
       );
 
-      // Reveal: learnMonsterType
       for (const p of playersToReveal) {
         await this.learnMonsterType(token.document, p);
       }
 
-      // Unreveal: unlearnMonsterType
       for (const p of playersToUnreveal) {
         await this.unlearnMonsterType(token.document, p);
       }
 
-      // Apply changes to any tokens of the same actor
       const sameTypeTokens = canvas.tokens.placeables.filter(
         (t) => t.document.getFlag(this.ID, "actorId") === actorId
       );
 
       sameTypeTokens.forEach((t) => this._processTokenVisibility(t));
 
-      // Update actor permissions with error handling
       if (token.actor) {
         try {
           const updates = {
@@ -2023,7 +2086,6 @@ class ANewFoe {
         }
       }
 
-      // Send notifications to affected players
       if (playersToReveal.length > 0) {
         await this._notifyPlayersOfReveal(
           token,
@@ -2044,7 +2106,6 @@ class ANewFoe {
         );
       }
 
-      // Update GM overlay
       if (game.user.isGM) {
         for (const token of sameTypeTokens) {
           await this.updateTokenOverlay(token);
@@ -2056,7 +2117,14 @@ class ANewFoe {
     }
   }
 
-  // Add this new helper method
+  /**
+   * Notifies players that a monster was revealed or hidden.
+   * @param {Token} token - The primary token
+   * @param {Token[]} sameTypeTokens - Related tokens
+   * @param {string[]} playerIds - Players to notify
+   * @param {string} actorId - The actor ID
+   * @param {boolean} isRevealing - True if revealing
+   */
   static async _notifyPlayersOfReveal(
     token,
     sameTypeTokens,
@@ -2065,7 +2133,6 @@ class ANewFoe {
     isRevealing
   ) {
     try {
-      // Create chat message
       if (game.settings.get(this.ID, "sendPlayerChat")) {
         await ChatMessage.create({
           content: `${isRevealing ? token.name : "A token"} has been ${
@@ -2076,7 +2143,6 @@ class ANewFoe {
         });
       }
 
-      // Notify each player individually
       for (const playerId of playerIds) {
         game.socket.emit(`module.${this.ID}`, {
           type: "monsterRevealed",
@@ -2092,19 +2158,20 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Displays a dialog for deciding which players see a monster.
+   * @param {Token[]} tokens - The selected tokens
+   */
   static async showRevealDialog(tokens) {
-    // Ensure tokens is an array
     if (!Array.isArray(tokens)) {
       tokens = [tokens];
     }
 
-    // Get the first token for template data
     const mainToken = tokens[0];
     const learnedMonsters = game.settings.get(this.ID, "learnedMonsters") || {};
     const revealedTo =
       mainToken.document.getFlag(this.ID, this.FLAGS.REVEALED_TO) || [];
 
-    // Get players with their current reveal status
     const players = game.users
       .filter((u) => !u.isGM)
       .map((u) => ({
@@ -2141,7 +2208,6 @@ class ANewFoe {
               })
               .get();
 
-            // Process each token
             for (const token of tokens) {
               await this.revealMonster(token, selectedPlayerIds);
             }
@@ -2156,8 +2222,12 @@ class ANewFoe {
     }).render(true);
   }
 
+  /**
+   * Grants knowledge of a monster to a player.
+   * @param {TokenDocument} tokenDocument - Token doc
+   * @param {string} userId - The player's ID
+   */
   static async learnMonsterType(tokenDocument, userId) {
-    // Remove reliance on REVEALED_TO token flag
     const actorId = tokenDocument.getFlag(this.ID, "actorId");
     if (!actorId) return;
 
@@ -2170,13 +2240,16 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Removes monster knowledge from a player.
+   * @param {TokenDocument} tokenDocument - Token doc
+   * @param {string} userId - The player's ID
+   */
   static async unlearnMonsterType(tokenDocument, userId) {
-    // Similarly, remove reliance on REVEALED_TO token flag
     const actorId = tokenDocument.getFlag(this.ID, "actorId");
     if (!actorId) return;
 
     try {
-      // Update learned monsters
       const learnedMonsters =
         game.settings.get(this.ID, "learnedMonsters") || {};
       if (learnedMonsters[userId]) {
@@ -2186,7 +2259,6 @@ class ANewFoe {
         await game.settings.set(this.ID, "learnedMonsters", learnedMonsters);
       }
 
-      // Clear revealed stats
       const revealedStats = game.settings.get(this.ID, "revealedStats") || {};
       const statKey = `${userId}.${actorId}`;
       if (revealedStats[statKey]) {
@@ -2194,7 +2266,6 @@ class ANewFoe {
         await game.settings.set(this.ID, "revealedStats", revealedStats);
       }
 
-      // Update all tokens of this actor type in all scenes
       const scenes = game.scenes;
       for (const scene of scenes) {
         const tokens = scene.tokens.filter(
@@ -2217,7 +2288,11 @@ class ANewFoe {
     }
   }
 
-  // Move these methods into the ANewFoe class and make them static
+  /**
+   * Checks if a monster type is known by a user.
+   * @param {Token|TokenDocument} tokenOrDocument - The token or doc
+   * @returns {boolean}
+   */
   static isMonsterTypeKnown(tokenOrDocument) {
     try {
       const document = tokenOrDocument.document ?? tokenOrDocument;
@@ -2235,19 +2310,22 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Confirms if the monster is fully revealed to the user.
+   * @param {Token|TokenDocument} tokenOrDocument - The token or doc
+   * @returns {boolean}
+   */
   static isMonsterRevealed(tokenOrDocument) {
     try {
       const document = tokenOrDocument.document ?? tokenOrDocument;
       const actorId = document.getFlag(this.ID, "actorId");
 
-      // First check if monster type is known
       const learnedMonsters =
         game.settings.get(this.ID, "learnedMonsters") || {};
       if (learnedMonsters[game.user.id]?.includes(actorId)) {
         return true;
       }
 
-      // Then check individual token reveal status
       const revealed = document.getFlag(this.ID, this.FLAGS.REVEALED);
       if (!revealed) return false;
 
@@ -2263,6 +2341,10 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Handles the final steps for rolling a stat check.
+   * @param {Object} data - Data regarding the requested roll
+   */
   static async processStatRoll(data) {
     try {
       const key = data.key;
@@ -2270,7 +2352,6 @@ class ANewFoe {
       const usePlayerStats = data.usePlayerStats;
       const actorId = data.actorId;
 
-      // Remove the pending request
       this.removePendingRequest(game.user.id, actorId, key);
 
       let rollFormula = "1d20";
@@ -2309,7 +2390,6 @@ class ANewFoe {
         ui.notifications.info("The check failed to reveal the stat.");
       }
 
-      // If display exists, refresh it
       if (MonsterInfoDisplay.instance) {
         await MonsterInfoDisplay.instance.refresh();
       }
@@ -2319,16 +2399,18 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Processes a GM approval for a player's request.
+   * @param {Object} data - Request data
+   */
   static async handleApproval(data) {
     try {
-      // Clear timeout if it exists
       const timeoutKey = `${data.userId}-${data.actorId}-${data.statKey}`;
       if (this.TIMEOUTS.has(timeoutKey)) {
         clearTimeout(this.TIMEOUTS.get(timeoutKey));
         this.TIMEOUTS.delete(timeoutKey);
       }
 
-      // Send approval to player with all necessary data
       game.socket.emit(`module.${this.ID}`, {
         type: "processApprovedStatRoll",
         userId: data.userId,
@@ -2338,10 +2420,8 @@ class ANewFoe {
         usePlayerStats: data.usePlayerStats,
       });
 
-      // Remove the request from pending
       this.removePendingRequest(data.userId, data.actorId, data.statKey);
 
-      // Update UI
       if (GMQueueApplication.instance) {
         GMQueueApplication.instance.render(true);
       }
@@ -2350,14 +2430,16 @@ class ANewFoe {
     }
   }
 
+  /**
+   * Processes a GM rejection of a player's request.
+   * @param {Object} data - Request data
+   */
   static async handleRejection(data) {
     if (!game.user.isGM) return;
 
     try {
-      // Remove the pending request
       this.removePendingRequest(data.userId, data.actorId, data.statKey);
 
-      // Notify the player
       game.socket.emit(`module.${this.ID}`, {
         type: "statRollRejected",
         userId: data.userId,
@@ -2365,23 +2447,26 @@ class ANewFoe {
         key: data.statKey,
       });
 
-      // Update the GM queue UI
       this.updateGMApprovalUI();
     } catch (error) {
       console.error(`${this.ID} | Error handling rejection:`, error);
     }
   }
 
+  /**
+   * Removes a pending request if found in the queue.
+   * @param {string} userId - Player user ID
+   * @param {string} actorId - Actor ID
+   * @param {string} statKey - Stat being requested
+   */
   static removePendingRequest(userId, actorId, statKey) {
     if (game.user.isGM) {
-      // Clear auto-reject timeout if it exists
       const timeoutKey = `${userId}-${actorId}-${statKey}`;
       if (this.TIMEOUTS.has(timeoutKey)) {
         clearTimeout(this.TIMEOUTS.get(timeoutKey));
         this.TIMEOUTS.delete(timeoutKey);
       }
 
-      // Remove the request and update the UI
       const initialLength = this.PENDING_REQUESTS.length;
       this.PENDING_REQUESTS = this.PENDING_REQUESTS.filter(
         (req) =>
@@ -2397,7 +2482,6 @@ class ANewFoe {
         this.updateGMApprovalUI();
       }
     } else {
-      // Player sends a socket message to GM to remove the pending request
       game.socket.emit(`module.${this.ID}`, {
         type: "removePendingRequest",
         userId,
@@ -2408,15 +2492,25 @@ class ANewFoe {
   }
 }
 
-// Add a new GMQueueApplication class
+/**
+ * Displays and manages the GM's approval queue.
+ * @extends Application
+ */
 class GMQueueApplication extends Application {
-  static instance = null;
-
+  /**
+   * Assigns the static instance property for referencing.
+   * @param {Object} options - Application options
+   */
   constructor(options = {}) {
     super(options);
     GMQueueApplication.instance = this;
   }
 
+  /**
+   * Provides the default Application options.
+   * @override
+   * @returns {Object}
+   */
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: "gm-approval-queue",
@@ -2432,6 +2526,10 @@ class GMQueueApplication extends Application {
     });
   }
 
+  /**
+   * Collects all pending requests to show in the template.
+   * @returns {Object}
+   */
   getData() {
     return {
       requests: ANewFoe.PENDING_REQUESTS.map((req) => {
@@ -2446,7 +2544,11 @@ class GMQueueApplication extends Application {
     };
   }
 
-  /** @override */
+  /**
+   * Sets the position of the GM queue window.
+   * @override
+   * @param {Object} options - Positioning info
+   */
   setPosition(options = {}) {
     const savedPosition = game.settings.get(ANewFoe.ID, "gmQueuePosition");
     if (savedPosition) {
@@ -2455,7 +2557,11 @@ class GMQueueApplication extends Application {
     return super.setPosition(options);
   }
 
-  /** @override */
+  /**
+   * Saves position before closing the queue window.
+   * @override
+   * @param {Object} options - Close options
+   */
   async close(options = {}) {
     if (this.position) {
       await game.settings.set(ANewFoe.ID, "gmQueuePosition", this.position);
@@ -2463,12 +2569,16 @@ class GMQueueApplication extends Application {
     return super.close(options);
   }
 
+  /**
+   * Listens for approve/reject clicks in the queue UI.
+   * @override
+   * @param {jQuery} html - The UI content
+   */
   activateListeners(html) {
     super.activateListeners(html);
 
     html.on("click", ".approve-request", async (event) => {
       const data = event.currentTarget.dataset;
-      // Find the full request data from PENDING_REQUESTS
       const request = ANewFoe.PENDING_REQUESTS.find(
         (req) =>
           req.userId === data.userId &&
@@ -2494,17 +2604,13 @@ class GMQueueApplication extends Application {
         await ANewFoe.handleRejection(request);
       }
     });
-
-    // Existing approve handler...
   }
 }
 
-// Adjust the module initialization
 Hooks.once("init", () => {
   CONFIG.debug.hooks = true;
 });
 
-// Move the initialization to the 'ready' hook
 Hooks.once("ready", () => {
   ANewFoe.initialize();
 });
