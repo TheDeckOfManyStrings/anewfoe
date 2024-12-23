@@ -1,0 +1,37 @@
+<form>
+  <div class="form-group">
+    <label>Select Player</label>
+    <select name="playerId" required>
+      {{#each players}}
+      <option value="{{this.id}}">{{this.name}}</option>
+      {{/each}}
+    </select>
+  </div>
+  <div class="form-group">
+    <label>Upload JSON File</label>
+    <input type="file" name="jsonFile" accept=".json" />
+    <p class="notes">
+      File should contain an array of monster names or a JSON object mapping
+      monster names to true/false values.
+    </p>
+  </div>
+  <div class="form-group">
+    <label>Or Paste JSON Content</label>
+    <textarea
+      name="jsonContent"
+      rows="10"
+      placeholder='["Goblin", "Kobold", "Bandit"]&#10;or&#10;{"Goblin": true, "Kobold": true, "Bandit": true}'
+    ></textarea>
+  </div>
+  <button id="bulk-upload-save" type="submit">Save</button>
+  <hr />
+  <label>WARNING THIS WILL WIPE THE SELECTED PLAYERS KNOWN MONSTERS</label>
+  <button type="button" id="wipe-known-monsters">Wipe Known Monsters</button>
+</form>
+
+<script>
+  document.getElementById('wipe-known-monsters').addEventListener('click', () => {
+    // Call the wipeKnownMonsters function from the script
+    ANewFoe.wipeKnownMonsters();
+  });
+</script>

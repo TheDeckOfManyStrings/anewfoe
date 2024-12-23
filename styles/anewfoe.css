@@ -1,0 +1,363 @@
+.reveal-monster {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #000;
+  border-radius: 5px;
+  color: #fff;
+  cursor: pointer;
+  margin: 0 4px;
+  padding: 4px;
+}
+
+.reveal-monster:hover {
+  background: rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 5px red;
+}
+
+.monster-info-window {
+  background: rgba(0, 0, 0, 0.9);
+  border: none;
+  border-radius: 10px;
+  padding: 0;
+  opacity: 0.85;
+  width: auto; /* Adjust width to fit content */
+  height: auto; /* Adjust height to fit content */
+  max-width: 100%; /* Ensure it doesn't overflow the screen */
+  max-height: 100%; /* Ensure it doesn't overflow the screen */
+  overflow: auto; /* Add scroll if content overflows */
+}
+
+.monster-info {
+  padding: 10px;
+}
+
+.monster-header {
+  margin-bottom: 10px;
+  align-items: center;
+  gap: 10px;
+}
+
+.monster-header img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain; /* Ensure the image scales down to fit within the square */
+  border: none;
+}
+
+.monster-header h2 {
+  margin: 0;
+  color: #fff;
+}
+
+.monster-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-row {
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px;
+  border-bottom: 1px solid #444;
+  color: #fff;
+}
+
+.stat-roll {
+  background: #4a4a4a;
+  border: 1px solid #666;
+  border-radius: 3px;
+  color: #fff;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 0.5s;
+  opacity: 0.5;
+  width: 100px; /* Set a fixed width */
+  text-align: center;
+}
+
+.stat-roll:hover {
+  background: #666;
+}
+
+.stat-roll i {
+  margin-right: 5px;
+}
+
+.monster-info-window .window-header {
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.8);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+}
+
+.monster-info-window .window-content {
+  background: rgba(0, 0, 0, 0.8);
+  border: none;
+  padding: 0;
+  border-radius: 0 0 10px 10px;
+}
+
+/* Add these new styles */
+.player-list {
+  margin-top: 10px;
+  padding: 5px;
+}
+
+.player-row {
+  padding: 5px;
+  margin: 2px 0;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+.player-row:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.player-row label {
+  flex: 1;
+  margin: 0;
+  padding: 0 5px;
+}
+
+.player-known {
+  color: #2ecc71;
+  margin-right: 5px;
+}
+
+.monster-info .monster-header img {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border: none;
+}
+
+.monster-info .monster-header img,
+.reveal-monster-dialog .monster-header img {
+  width: 50px;
+  height: 50px;
+  max-width: 50px;
+  max-height: 50px;
+  object-fit: cover;
+  border: none;
+}
+
+/* Add these new styles for the reveal dialog */
+.dialog.reveal-monster-dialog {
+  background: rgba(0, 0, 0, 0.8);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+}
+
+.reveal-monster-dialog .window-header {
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px 10px 0 0;
+  color: #fff;
+}
+
+.reveal-monster-dialog .window-content {
+  background: transparent;
+  border: none;
+  padding: 10px;
+  border-radius: 0 0 10px 10px;
+  color: #fff;
+}
+
+.reveal-monster-dialog .dialog-content {
+  background: transparent;
+}
+
+.reveal-monster-dialog .monster-info {
+  background: transparent !important;
+}
+
+.reveal-monster-dialog .dialog-buttons {
+  border: none;
+  background: transparent;
+  padding: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.reveal-monster-dialog .dialog-button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  color: #fff;
+  transition: all 0.3s;
+}
+
+.reveal-monster-dialog .dialog-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.reveal-monster-dialog .player-row {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.reveal-monster-dialog .window-title,
+.reveal-monster-dialog .header-button {
+  color: #fff;
+}
+
+/* Update reveal dialog styles */
+.reveal-monster-window {
+  background: rgba(0, 0, 0, 0.8);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+}
+
+.reveal-monster-window .window-header {
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px 10px 0 0;
+  color: #fff;
+}
+
+.reveal-monster-window .window-content {
+  background: transparent;
+  border: none;
+  padding: 10px;
+  border-radius: 0 0 10px 10px;
+  color: #fff;
+}
+
+/* Rename existing dialog styles to match new class */
+.reveal-monster-window .dialog-content {
+  background: transparent;
+}
+
+.reveal-monster-window .monster-info {
+  background: transparent !important;
+}
+
+.reveal-monster-window .dialog-buttons {
+  border: none;
+  background: transparent;
+  padding: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.reveal-monster-window .dialog-button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  color: #fff;
+  transition: all 0.3s;
+}
+
+.reveal-monster-window .dialog-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.reveal-monster-window .player-row {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.reveal-monster-window .window-title,
+.reveal-monster-window .header-button {
+  color: #fff;
+}
+
+/* Add GM Queue styling to match Monster Info */
+.gm-queue-window {
+  background: rgba(0, 0, 0, 0.8);
+  border: none;
+  border-radius: 10px;
+  padding: 0;
+  opacity: 0.85;
+}
+
+.gm-queue-window .window-header {
+  background: rgba(0, 0, 0, 0.8);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+}
+
+.gm-queue-window .window-content {
+  background: rgba(0, 0, 0, 0.8);
+  border: none;
+  padding: 0;
+  border-radius: 0 0 10px 10px;
+}
+
+.gm-queue-container {
+  padding: 10px;
+  color: #fff;
+}
+
+.request-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  margin: 4px 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.request-info {
+  flex: 1;
+  margin-right: 10px;
+}
+
+.request-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.request-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  color: #fff;
+  transition: transform 0.2s;
+}
+
+.approve-request:hover {
+  color: #4caf50;
+  transform: scale(1.2);
+}
+
+.reject-request:hover {
+  color: #f44336;
+  transform: scale(1.2);
+}
+
+.no-requests {
+  text-align: center;
+  color: #888;
+  padding: 20px;
+}
+
+#bulk-upload-save {
+  border: 1px solid #000;
+
+  color: green;
+  cursor: pointer;
+  margin: 0 4px;
+  padding: 4px;
+  margin-bottom: 20px;
+}
+
+#wipe-known-monsters {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #000;
+
+  color: red;
+  cursor: pointer;
+  margin: 0 4px;
+  padding: 4px;
+  margin-top: 20px;
+}
