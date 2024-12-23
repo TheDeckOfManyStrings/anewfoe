@@ -1452,9 +1452,18 @@ class ANewFoe {
     });
 
     Hooks.on("canvasReady", async () => {
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      // Add delay to ensure tokens are fully loaded
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       for (const token of canvas.tokens.placeables) {
+        // Skip if token isn't ready for rendering
+        if (
+          !token?.mesh?.texture?.baseTexture?.valid ||
+          !token?.scene ||
+          token._destroyed
+        )
+          continue;
+
         try {
           if (
             !token.document?.flags ||
@@ -1466,24 +1475,13 @@ class ANewFoe {
           const isKnown = this.isMonsterTypeKnown(token.document);
           const isRevealed = this.isMonsterRevealed(token.document);
 
-          if (!token.mesh || !token.mesh.texture) {
-            await new Promise((resolve) => setTimeout(resolve, 100));
-          }
-
-          if (!token.mesh || !token.mesh.texture) {
-            console.warn(
-              `${this.ID} | Token mesh not available, skipping visibility processing`
-            );
-            return;
-          }
-
           if (game.user.isGM) {
             await this.updateTokenOverlay(token);
           } else {
             if (isKnown || isRevealed) {
               await this._restoreTokenAppearance(token);
               this._makeTokenClickable(token);
-            } else if (token.mesh && token.mesh.texture) {
+            } else if (token.mesh?.texture) {
               await this._processTokenVisibility(token);
             }
           }
@@ -1494,11 +1492,16 @@ class ANewFoe {
           );
         }
       }
-
-      canvas.tokens.render();
     });
 
     Hooks.on("refreshToken", async (token) => {
+      if (
+        !token?.mesh?.texture?.baseTexture?.valid ||
+        !token?.parent ||
+        !token?.scene ||
+        token._destroyed
+      )
+        return;
       if (!game.user.isGM) {
         if (
           !token.document?.flags ||
@@ -1552,6 +1555,15 @@ class ANewFoe {
     });
 
     Hooks.on("drawToken", (token) => {
+      if (
+        !token?.mesh?.texture?.baseTexture?.valid ||
+        !token?.parent ||
+        !token?.scene ||
+        token._destroyed
+      )
+        return;
+      if (!token || !token?.parent || !token?.scene || token._destroyed) return;
+      if (!token?.parent) return;
       if (game.user.isGM) {
         setTimeout(() => ANewFoe.updateTokenOverlay(token), 100);
       }
