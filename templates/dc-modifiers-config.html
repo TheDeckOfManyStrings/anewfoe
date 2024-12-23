@@ -1,11 +1,9 @@
 <form>
-  <!-- ...existing code... -->
   {{#each modifiers}}
   <div class="form-group">
     <label for="modifier-{{key}}">{{label}}</label>
     <input type="number" name="modifier-{{key}}" value="{{value}}" />
   </div>
   {{/each}}
-  <!-- ...existing code... -->
   <button type="submit">Save Changes</button>
 </form>
