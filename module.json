@@ -1,7 +1,7 @@
 {
   "id": "anewfoe",
   "title": "ANewFoe",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "compatibility": {
     "minimum": "12",
     "verified": "12"
@@ -25,6 +25,6 @@
   ],
   "socket": true,
   "url": "https://github.com/TheDeckOfManyStrings/anewfoe",
-  "download": "https://github.com/TheDeckOfManyStrings/anewfoe/archive/refs/tags/1.0.0.zip",
-  "readme": "README.md"
+  "download": "https://github.com/TheDeckOfManyStrings/anewfoe/archive/refs/tags/1.0.1.zip",
+  "readme": "https://raw.githubusercontent.com/TheDeckOfManyStrings/anewfoe/refs/tags/1.0.1/module.json"
 }
