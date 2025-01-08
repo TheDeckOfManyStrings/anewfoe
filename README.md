@@ -14,11 +14,20 @@ ANewFoe is a Foundry VTT module designed to enhance the mystery and discovery of
 
 ## Usage
 
+#### GM:
+
 1. **Initialize the Module**: Ensure the module is enabled in Foundry VTT.
 2. **Configure Settings**: Adjust the settings as per your campaign needs. Visualizations and stat roll characteristics can be customized independently.
 3. **Hide and Reveal Monsters**: Use the new token hud button on each token to hide and reveal monsters during gameplay.
 4. **Manage Stat Rolls**: Approve or reject player rolls in the GM queue window to reveal monster stats.
 5. **Bulk Upload Knowledge**: Use the bulk upload feature to grant players knowledge of multiple monsters at once. (Intended for use before or after game time)
+
+#### PLAYERS:
+
+1. **Token Identification**: If a token is unknown it will appear with a black silhouette. You cannot perform actions on this token until you have identified it. Ask your gm to identify the monster. Once you learn the monsters identity its image will appear.
+2. **After Identification**: Depending on your GM's settings, either click the book in the top right corner of the token or left click on the identified Monster to open the Monster info window.
+3. **Monster Info Window**: This window displays health, ac, speed, and stats of the monster. You do not know these attributes until you have discerned them. Click on the corresponding button to send a request to your GM to discern a trait.
+4. **Use your new found knowledge to slay your enemies!**
 
 ## Setup
 
@@ -135,6 +144,22 @@ Base settings for the module should be already set up. If you wish to prepopulat
 ## Settings
 
 ### Core Display Settings
+
+- **Auto Reveal**
+
+  - **Name**: `autoReveal`
+  - **Hint**: Choose to auto reveal tokens to your players.
+  - **Type**: Boolean
+  - **Default**: `false`
+  - **Requires Reload**: `false`
+
+- **Use Left Click**
+
+  - **Name**: `useLeftClick`
+  - **Hint**: Change Monster Info to pop up on left click instead of when clicking the book symbol.
+  - **Type**: Boolean
+  - **Default**: `false`
+  - **Requires Reload**: `true`
 
 - **Monster Hiding Style**
   - **Name**: `hideStyle`
