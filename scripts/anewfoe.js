@@ -1205,6 +1205,16 @@ class ANewFoe {
       },
     });
 
+    game.settings.register(this.ID, "useLeftClick", {
+      name: "Use Left Click for Monster Info",
+      hint: "When enabled, left-clicking a monster opens the info window. When disabled, a hover button will appear instead, allowing other modules to use left-click. Note: If turned on, this will override players left-click functionality. Turning this on is known to have adverse effects with modules like Argon Combat HUD.",
+      scope: "world",
+      config: true,
+      type: Boolean,
+      default: false,
+      requiresReload: true,
+    });
+
     game.settings.register(this.ID, "hideStyle", {
       name: "Monster Hiding Style",
       hint: "Choose how unidentified monsters appear to players",
@@ -1731,57 +1741,119 @@ class ANewFoe {
    */
   static _makeTokenClickable(token) {
     try {
-      if (!token || !token.actor) {
-        return;
+      if (!token || !token.actor) return;
+
+      const useLeftClick = game.settings.get(this.ID, "useLeftClick");
+      const userLevel = token.actor.getUserLevel(game.user.id);
+
+      // Only add hover button if not owner/observer and monster is revealed
+      if (
+        !useLeftClick &&
+        userLevel < CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER &&
+        ANewFoe.isMonsterRevealed(token.document)
+      ) {
+        // Create hover button if it doesn't exist
+        if (!token.monsterInfoButton) {
+          const button = new PIXI.Container();
+
+          // Create sprite using proper PIXI v4+ syntax
+          const texture = PIXI.Texture.from("icons/svg/book.svg");
+          const icon = new PIXI.Sprite(texture);
+          icon.width = 24;
+          icon.height = 24;
+          icon.alpha = 0.8;
+
+          const bg = new PIXI.Graphics();
+          bg.beginFill(0x000000, 0.5);
+          // bg.drawCircle(12, 12, 14);
+          bg.drawRoundedRect(0, 0, 32, 32, 6);
+          bg.endFill();
+
+          icon.anchor.set(0.5); // Set anchor to center
+          icon.position.set(bg.width / 2, bg.height / 2); // Center icon in bg
+
+          button.addChild(bg);
+          button.addChild(icon);
+          button.position.set(token.w - 32, 0);
+          button.alpha = 0;
+          button.eventMode = "static"; // New PIXI v7 way to make interactive
+          button.cursor = "pointer"; // New PIXI v7 way to set cursor
+
+          button.on("pointerover", () => (button.alpha = 1));
+          button.on("pointerout", () => (button.alpha = 0));
+          button.on("click", async () => {
+            if (game.settings.get(ANewFoe.ID, "enableStatReveal")) {
+              await ANewFoe.showTokenInfo(token);
+            }
+          });
+
+          token.addChild(button);
+          token.monsterInfoButton = button;
+        }
+
+        // Show button on hover
+        token.eventMode = "static"; // Enable events on token
+        token.on("mouseover", () => {
+          if (token.monsterInfoButton) token.monsterInfoButton.alpha = 1;
+        });
+        token.on("mouseout", () => {
+          if (token.monsterInfoButton) token.monsterInfoButton.alpha = 0;
+        });
       }
 
-      token.interactive = true;
-      token.buttonMode = true;
-
+      // Handle click behavior based on settings
       if (token.mouseInteractionManager) {
-        token.mouseInteractionManager.permissions.clickLeft = true;
-        token.mouseInteractionManager.callbacks.clickLeft = async (event) => {
-          try {
-            event.preventDefault();
-            event.stopPropagation();
+        if (useLeftClick) {
+          token.mouseInteractionManager.permissions.clickLeft = true;
+          token.mouseInteractionManager.callbacks.clickLeft = async (event) => {
+            try {
+              event.preventDefault();
+              event.stopPropagation();
 
-            const userId = game.user.id;
-            if (!token.actor) {
-              console.warn(
-                `${this.ID} | Actor not available for token:`,
-                token.name
-              );
-              return;
-            }
-
-            const userPermissionLevel = token.actor.getUserLevel(userId);
-
-            if (userPermissionLevel >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER) {
-              return token._onClickLeft(event);
-            }
-
-            if (ANewFoe.isMonsterRevealed(token.document)) {
-              if (game.settings.get(ANewFoe.ID, "enableStatReveal")) {
-                await ANewFoe.showTokenInfo(token);
+              const userId = game.user.id;
+              if (!token.actor) {
+                console.warn(
+                  `${this.ID} | Actor not available for token:`,
+                  token.name
+                );
+                return;
               }
-            }
-          } catch (error) {
-            console.error(`${this.ID} | Error in click handler:`, error);
-          }
-        };
 
+              const userPermissionLevel = token.actor.getUserLevel(userId);
+              if (
+                userPermissionLevel >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
+              ) {
+                return token._onClickLeft(event);
+              }
+
+              if (ANewFoe.isMonsterRevealed(token.document)) {
+                if (game.settings.get(ANewFoe.ID, "enableStatReveal")) {
+                  await ANewFoe.showTokenInfo(token);
+                }
+              }
+            } catch (error) {
+              console.error(`${this.ID} | Error in click handler:`, error);
+            }
+          };
+        } else {
+          // Allow default left-click behavior
+          token.mouseInteractionManager.permissions.clickLeft = true;
+          token.mouseInteractionManager.callbacks.clickLeft =
+            token._onClickLeft.bind(token);
+        }
+
+        // Restrict other interactions for non-owners
         if (
-          token.actor &&
           token.actor.getUserLevel(game.user.id) <
-            CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
+          CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
         ) {
           token.mouseInteractionManager.permissions.clickLeft2 = false;
-          token.mouseInteractionManager.permissions.clickRight = false;
           token.mouseInteractionManager.permissions.dragLeft = false;
           token.mouseInteractionManager.permissions.dragRight = false;
         }
       }
 
+      // Always allow right-click targeting
       token.on("rightdown", (event) => {
         if (event.data.originalEvent.detail === 2) {
           token.setTarget(!token.isTargeted, { releaseOthers: false });
@@ -1957,6 +2029,12 @@ class ANewFoe {
         if (token.mesh && token.mesh.texture) {
           await token.refresh();
         }
+
+        // Remove info button if it exists
+        if (token.monsterInfoButton) {
+          token.monsterInfoButton.destroy();
+          token.monsterInfoButton = null;
+        }
       }
     } catch (error) {
       console.error(`${this.ID} | Error processing token visibility:`, error);
@@ -1980,6 +2058,11 @@ class ANewFoe {
 
       token.document.texture.tint = originalTint || 0xffffff;
       if (originalName) token.document.name = originalName;
+
+      // Reapply hover button if needed
+      if (!game.settings.get(this.ID, "useLeftClick")) {
+        this._makeTokenClickable(token);
+      }
 
       await token.refresh();
     } catch (error) {

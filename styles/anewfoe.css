@@ -361,3 +361,23 @@
   padding: 4px;
   margin-top: 20px;
 }
+
+/* Add styles for the hover button */
+.monster-info-button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.monster-info-button:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
