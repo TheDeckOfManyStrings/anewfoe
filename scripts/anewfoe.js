@@ -1190,6 +1190,21 @@ class ANewFoe {
    * Registers all relevant settings for this module.
    */
   static registerSettings() {
+    game.settings.register(this.ID, "autoReveal", {
+      name: "Auto-Reveal Monsters",
+      hint: "Automatically reveal all monsters to players when they are created. This bypasses the silhouette functionality. Note: If you wish to turn this feature back off, monsters revealed while turned on will need to be manually toggled.",
+      scope: "world",
+      config: true,
+      type: Boolean,
+      default: false,
+      onChange: () => {
+        // Refresh the canvas to apply changes
+        if (canvas.ready) {
+          canvas.draw();
+        }
+      },
+    });
+
     game.settings.register(this.ID, "hideStyle", {
       name: "Monster Hiding Style",
       hint: "Choose how unidentified monsters appear to players",
@@ -1419,6 +1434,15 @@ class ANewFoe {
           "flags.anewfoe.originalTint": data.texture.tint || null,
           "flags.anewfoe.originalAlpha": data.alpha || null,
         };
+
+        // If auto-reveal is enabled, automatically set the token as revealed
+        if (game.settings.get(this.ID, "autoReveal")) {
+          const playerIds = game.users.filter((u) => !u.isGM).map((u) => u.id);
+          originalData[`flags.${this.ID}.${this.FLAGS.REVEALED}`] = true;
+          originalData[`flags.${this.ID}.${this.FLAGS.REVEALED_TO}`] =
+            playerIds;
+        }
+
         document.updateSource(originalData);
       }
     });
@@ -2047,6 +2071,10 @@ class ANewFoe {
    */
   static async revealMonster(token, selectedPlayerIds) {
     try {
+      // Add check for auto-reveal setting
+      if (game.settings.get(this.ID, "autoReveal")) {
+        selectedPlayerIds = game.users.filter((u) => !u.isGM).map((u) => u.id);
+      }
       const actorId = token.document.getFlag(this.ID, "actorId");
       const learnedMonsters =
         game.settings.get(this.ID, "learnedMonsters") || {};
@@ -2620,7 +2648,7 @@ class GMQueueApplication extends Application {
 }
 
 Hooks.once("init", () => {
-  CONFIG.debug.hooks = true;
+  // CONFIG.debug.hooks = true;
 });
 
 Hooks.once("ready", () => {
