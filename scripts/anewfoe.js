@@ -2474,6 +2474,7 @@ class ANewFoe {
       const dc = parseInt(data.dc);
       const usePlayerStats = data.usePlayerStats;
       const actorId = data.actorId;
+      const abilityOverride = data.abilityOverride;
 
       this.removePendingRequest(game.user.id, actorId, key);
 
@@ -2481,7 +2482,9 @@ class ANewFoe {
       if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
         const actor = game.user.character;
         if (actor) {
-          const modifier = actor.system.abilities[key].mod;
+          // Use the overridden ability if provided, otherwise use the original key
+          const abilityKey = abilityOverride || key;
+          const modifier = actor.system.abilities[abilityKey].mod;
           rollFormula += `${modifier >= 0 ? "+" : ""}${modifier}`;
         }
       }
@@ -2534,6 +2537,7 @@ class ANewFoe {
         this.TIMEOUTS.delete(timeoutKey);
       }
 
+      // Include the selected ability in the process approval message
       game.socket.emit(`module.${this.ID}`, {
         type: "processApprovedStatRoll",
         userId: data.userId,
@@ -2541,6 +2545,7 @@ class ANewFoe {
         key: data.statKey,
         dc: data.dc,
         usePlayerStats: data.usePlayerStats,
+        abilityOverride: data.abilityOverride,
       });
 
       this.removePendingRequest(data.userId, data.actorId, data.statKey);
@@ -2700,6 +2705,16 @@ class GMQueueApplication extends Application {
   activateListeners(html) {
     super.activateListeners(html);
 
+    // Set initial dropdown values based on the stat being checked
+    html.find(".ability-select").each(function () {
+      const statKey = $(this).data("key");
+      if (["str", "dex", "con", "int", "wis", "cha"].includes(statKey)) {
+        $(this).val(statKey);
+      } else {
+        $(this).val("int"); // Default to Intelligence for non-ability checks
+      }
+    });
+
     html.on("click", ".approve-request", async (event) => {
       const data = event.currentTarget.dataset;
       const request = ANewFoe.PENDING_REQUESTS.find(
@@ -2710,6 +2725,11 @@ class GMQueueApplication extends Application {
       );
 
       if (request) {
+        // Get the selected ability from the dropdown
+        const abilitySelect = html.find(
+          `.ability-select[data-user-id="${data.userId}"][data-actor-id="${data.actorId}"][data-key="${data.key}"]`
+        );
+        request.abilityOverride = abilitySelect.val();
         await ANewFoe.handleApproval(request);
       }
     });
@@ -2731,7 +2751,7 @@ class GMQueueApplication extends Application {
 }
 
 Hooks.once("init", () => {
-  // CONFIG.debug.hooks = true;
+  CONFIG.debug.hooks = true;
 });
 
 Hooks.once("ready", () => {
