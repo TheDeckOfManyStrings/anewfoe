@@ -1,7 +1,7 @@
 {
   "id": "anewfoe",
   "title": "ANewFoe",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "compatibility": {
     "minimum": "12",
     "verified": "12"
@@ -16,6 +16,10 @@
   ],
   "scripts": ["scripts/anewfoe.js"],
   "styles": ["styles/anewfoe.css"],
+  "templates": [
+    "templates/status-settings.html",
+    "templates/health-settings.html"
+  ],
   "languages": [
     {
       "lang": "en",
@@ -36,6 +40,6 @@
   },
   "socket": true,
   "url": "https://github.com/TheDeckOfManyStrings/anewfoe",
-  "download": "https://github.com/TheDeckOfManyStrings/anewfoe/archive/refs/tags/1.0.2.zip",
-  "readme": "https://raw.githubusercontent.com/TheDeckOfManyStrings/anewfoe/refs/tags/1.0.2/README.md"
+  "download": "https://github.com/TheDeckOfManyStrings/anewfoe/archive/refs/tags/1.0.3.zip",
+  "readme": "https://raw.githubusercontent.com/TheDeckOfManyStrings/anewfoe/refs/tags/1.0.3/README.md"
 }

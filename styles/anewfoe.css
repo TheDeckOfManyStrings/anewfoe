@@ -325,6 +325,27 @@
   transition: transform 0.2s;
 }
 
+.request-actions .ability-select {
+  background: rgba(0, 0, 0, 0.8); /* Darker background to match theme */
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  color: #fff;
+  padding: 2px 4px;
+  margin-right: 5px;
+  min-width: 70px;
+}
+
+.request-actions .ability-select:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.request-actions .ability-select option {
+  background-color: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 4px;
+}
+
 .ability-select {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.3);
