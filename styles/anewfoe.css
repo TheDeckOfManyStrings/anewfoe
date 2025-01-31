@@ -325,6 +325,31 @@
   transition: transform 0.2s;
 }
 
+.ability-select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  color: #fff;
+  padding: 2px 4px;
+  margin-right: 5px;
+  min-width: 70px;
+}
+
+.ability-select:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.ability-select option {
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  color: #000000;
+  padding: 2px 4px;
+  margin-right: 5px;
+  min-width: 70px;
+}
+
 .approve-request:hover {
   color: #4caf50;
   transform: scale(1.2);

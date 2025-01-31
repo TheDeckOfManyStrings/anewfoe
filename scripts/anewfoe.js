@@ -615,16 +615,19 @@ class MonsterInfoDisplay extends Application {
       const dc = parseInt(data.dc);
       const usePlayerStats = data.usePlayerStats;
       const actorId = data.actorId;
+      const abilityOverride = data.abilityOverride;
 
       ANewFoe.removePendingRequest(game.user.id, actorId, key);
 
       let rollFormula = "1d20";
       let modifier = 0;
+      let abilityUsed = abilityOverride || key;
 
-      if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
+      // Only add modifier if an ability is selected and player stats are enabled
+      if (usePlayerStats && abilityOverride !== "") {
         const character = game.user.character;
         if (character) {
-          modifier = character.system.abilities[key].mod;
+          modifier = character.system.abilities[abilityUsed].mod;
           rollFormula += modifier >= 0 ? `+${modifier}` : modifier;
         }
       }
@@ -632,17 +635,23 @@ class MonsterInfoDisplay extends Application {
       const roll = new Roll(rollFormula);
       await roll.evaluate();
 
-      const total = roll.total;
+      let rollMessage = `Attempting to discern ${key.toUpperCase()}...`;
+      if (usePlayerStats && abilityOverride !== "") {
+        const abilityLabel = abilityUsed.toUpperCase();
+        rollMessage += ` (Using ${abilityLabel} Check: ${roll.formula})`;
+      } else {
+        rollMessage += ` (Flat d20: ${roll.formula})`;
+      }
 
       await ChatMessage.create({
-        flavor: `Attempting to discern ${key.toUpperCase()}...`,
+        flavor: rollMessage,
         speaker: ChatMessage.getSpeaker(),
         rolls: [roll],
         type: CONST.CHAT_MESSAGE_TYPES.ROLL,
         sound: CONFIG.sounds.dice,
       });
 
-      if (total >= dc) {
+      if (roll.total >= dc) {
         game.socket.emit(`module.${ANewFoe.ID}`, {
           type: "revealStat",
           userId: game.user.id,
@@ -2479,13 +2488,15 @@ class ANewFoe {
       this.removePendingRequest(game.user.id, actorId, key);
 
       let rollFormula = "1d20";
-      if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
-        const actor = game.user.character;
-        if (actor) {
-          // Use the overridden ability if provided, otherwise use the original key
-          const abilityKey = abilityOverride || key;
-          const modifier = actor.system.abilities[abilityKey].mod;
-          rollFormula += `${modifier >= 0 ? "+" : ""}${modifier}`;
+      let modifier = 0;
+      let abilityUsed = abilityOverride || key;
+
+      // Only add modifier if an ability is selected and player stats are enabled
+      if (usePlayerStats && abilityOverride !== "") {
+        const character = game.user.character;
+        if (character) {
+          modifier = character.system.abilities[abilityUsed].mod;
+          rollFormula += modifier >= 0 ? `+${modifier}` : modifier;
         }
       }
 
@@ -2493,8 +2504,11 @@ class ANewFoe {
       await roll.evaluate();
 
       let rollMessage = `Attempting to discern ${key.toUpperCase()}...`;
-      if (usePlayerStats && MonsterInfoDisplay.isAbilityCheck(key)) {
-        rollMessage += ` (${key.toUpperCase()} Check with ${roll.formula})`;
+      if (usePlayerStats && abilityOverride !== "") {
+        const abilityLabel = abilityUsed.toUpperCase();
+        rollMessage += ` (Using ${abilityLabel} Check: ${roll.formula})`;
+      } else {
+        rollMessage += ` (Flat d20: ${roll.formula})`;
       }
 
       await ChatMessage.create({
@@ -2545,7 +2559,7 @@ class ANewFoe {
         key: data.statKey,
         dc: data.dc,
         usePlayerStats: data.usePlayerStats,
-        abilityOverride: data.abilityOverride,
+        abilityOverride: data.abilityOverride,  // Make sure this is included
       });
 
       this.removePendingRequest(data.userId, data.actorId, data.statKey);
@@ -2711,7 +2725,7 @@ class GMQueueApplication extends Application {
       if (["str", "dex", "con", "int", "wis", "cha"].includes(statKey)) {
         $(this).val(statKey);
       } else {
-        $(this).val("int"); // Default to Intelligence for non-ability checks
+        $(this).val(""); // Default to None for non-ability checks
       }
     });
 
@@ -2725,12 +2739,17 @@ class GMQueueApplication extends Application {
       );
 
       if (request) {
-        // Get the selected ability from the dropdown
         const abilitySelect = html.find(
           `.ability-select[data-user-id="${data.userId}"][data-actor-id="${data.actorId}"][data-key="${data.key}"]`
         );
-        request.abilityOverride = abilitySelect.val();
-        await ANewFoe.handleApproval(request);
+
+        // Create a new request object with the ability override
+        const modifiedRequest = {
+          ...request,
+          abilityOverride: abilitySelect.val(),
+        };
+
+        await ANewFoe.handleApproval(modifiedRequest);
       }
     });
 
