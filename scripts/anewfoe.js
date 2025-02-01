@@ -257,13 +257,16 @@ class MonsterInfoDisplay extends Application {
       id: "monster-info-display",
       template: `modules/anewfoe/templates/monster-info.html`,
       title: "Monster Info",
-      width: 240,
-      height: 420,
+      width: game.settings.get(ANewFoe.ID, "monsterInfoPosition").width || 240,
+      height:
+        game.settings.get(ANewFoe.ID, "monsterInfoPosition").height || 420,
       minimizable: true,
       resizable: true,
       dragDrop: [],
       classes: ["monster-info-window"],
       popOut: true,
+      left: game.settings.get(ANewFoe.ID, "monsterInfoPosition").left || 0,
+      top: game.settings.get(ANewFoe.ID, "monsterInfoPosition").top || 0,
     });
   }
 
@@ -2559,7 +2562,7 @@ class ANewFoe {
         key: data.statKey,
         dc: data.dc,
         usePlayerStats: data.usePlayerStats,
-        abilityOverride: data.abilityOverride,  // Make sure this is included
+        abilityOverride: data.abilityOverride, // Make sure this is included
       });
 
       this.removePendingRequest(data.userId, data.actorId, data.statKey);
@@ -2646,6 +2649,9 @@ class GMQueueApplication extends Application {
   constructor(options = {}) {
     super(options);
     GMQueueApplication.instance = this;
+    
+    // Bind the position update method
+    this._onWindowPositionUpdate = this._onWindowPositionUpdate.bind(this);
   }
 
   /**
@@ -2658,8 +2664,10 @@ class GMQueueApplication extends Application {
       id: "gm-approval-queue",
       template: "modules/anewfoe/templates/gm-queue.html",
       title: "Monster Knowledge Requests",
-      width: 300,
+      width: game.settings.get(ANewFoe.ID, "gmQueuePosition").width || 300,
       height: "auto",
+      left: game.settings.get(ANewFoe.ID, "gmQueuePosition").left || 0,
+      top: game.settings.get(ANewFoe.ID, "gmQueuePosition").top || 0,
       minimizable: true,
       resizable: true,
       dragDrop: [],
@@ -2766,6 +2774,62 @@ class GMQueueApplication extends Application {
         await ANewFoe.handleRejection(request);
       }
     });
+
+    // Add position tracking to the window itself
+    const element = this.element[0];
+    if (element) {
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && 
+                    (mutation.attributeName === 'style' || 
+                     mutation.attributeName === 'transform')) {
+                    this._onWindowPositionUpdate();
+                }
+            });
+        });
+
+        observer.observe(element, {
+            attributes: true,
+            attributeFilter: ['style', 'transform']
+        });
+    }
+  }
+
+  /**
+   * Handles window position updates
+   * @private
+   */
+  async _onWindowPositionUpdate() {
+      if (this.position) {
+          console.log("Window position updated", this.position);
+          await game.settings.set(ANewFoe.ID, "gmQueuePosition", this.position);
+      }
+  }
+
+  /**
+   * Renders the display, applying any stored position info.
+   * @override
+   * @param {boolean} force - Force render
+   * @param {Object} options - Rendering options
+   */
+  async _onRender(event) {
+    super._onRender(event);
+    game.settings.get(ANewFoe.ID, "gmQueuePosition");
+
+    this.setPosition();
+  }
+
+  /**
+   * Renders the display, applying any stored position info.
+   * @override
+   * @param {boolean} force - Force render
+   * @param {Object} options - Rendering options
+   */
+  async _onResize(event) {
+    super._onResize(event);
+    game.settings.set(ANewFoe.ID, "gmQueuePosition", this.position);
+
+    this.setPosition({ width: this.position.width });
   }
 }
 
