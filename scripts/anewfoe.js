@@ -245,6 +245,9 @@ class MonsterInfoDisplay extends Application {
     this.token = token;
     this.actor = token.actor;
     MonsterInfoDisplay.instance = this;
+
+    // Bind the position update method
+    this._onWindowPositionUpdate = this._onWindowPositionUpdate.bind(this);
   }
 
   /**
@@ -557,6 +560,38 @@ class MonsterInfoDisplay extends Application {
         console.error(`${ANewFoe.ID} | Error in stat roll:`, error);
       }
     });
+
+    // Add position tracking to the window itself
+    const element = this.element[0];
+    if (element) {
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (
+            mutation.type === "attributes" &&
+            (mutation.attributeName === "style" ||
+              mutation.attributeName === "transform")
+          ) {
+            this._onWindowPositionUpdate();
+          }
+        });
+      });
+
+      observer.observe(element, {
+        attributes: true,
+        attributeFilter: ["style", "transform"],
+      });
+    }
+  }
+
+  /**
+   * Handles window position and size updates
+   * @private
+   */
+  async _onWindowPositionUpdate() {
+    if (this.position) {
+      //console.log("Monster Info window position/size updated", this.position);
+      await game.settings.set(ANewFoe.ID, "monsterInfoPosition", this.position);
+    }
   }
 
   /**
@@ -677,6 +712,29 @@ class MonsterInfoDisplay extends Application {
   static isAbilityCheck(key) {
     const isAbility = ["str", "dex", "con", "int", "wis", "cha"].includes(key);
     return isAbility;
+  }
+
+  /** @override */
+  _getHeaderButtons() {
+    const buttons = super._getHeaderButtons();
+    // Add dragstart and dragend event handlers to header
+    if (this.element && this.element.length) {
+      const header = this.element.find(".window-header");
+      header.on("dragstart", this._onDragStart.bind(this));
+      header.on("dragend", this._onDragEnd.bind(this));
+    }
+    return buttons;
+  }
+
+  _onDragStart(event) {
+    //console.log("Monster Info window drag started");
+  }
+
+  _onDragEnd(event) {
+    //console.log("Monster Info window drag ended", this.position);
+    if (this.position) {
+      game.settings.set(ANewFoe.ID, "monsterInfoPosition", this.position);
+    }
   }
 }
 
@@ -2526,7 +2584,7 @@ class ANewFoe {
         game.socket.emit(`module.${this.ID}`, {
           type: "revealStat",
           userId: game.user.id,
-          actorId: actorId,
+          actorId: this.actor.id,
           key: key,
         });
       } else {
@@ -2649,7 +2707,7 @@ class GMQueueApplication extends Application {
   constructor(options = {}) {
     super(options);
     GMQueueApplication.instance = this;
-    
+
     // Bind the position update method
     this._onWindowPositionUpdate = this._onWindowPositionUpdate.bind(this);
   }
@@ -2778,20 +2836,22 @@ class GMQueueApplication extends Application {
     // Add position tracking to the window itself
     const element = this.element[0];
     if (element) {
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'attributes' && 
-                    (mutation.attributeName === 'style' || 
-                     mutation.attributeName === 'transform')) {
-                    this._onWindowPositionUpdate();
-                }
-            });
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (
+            mutation.type === "attributes" &&
+            (mutation.attributeName === "style" ||
+              mutation.attributeName === "transform")
+          ) {
+            this._onWindowPositionUpdate();
+          }
         });
+      });
 
-        observer.observe(element, {
-            attributes: true,
-            attributeFilter: ['style', 'transform']
-        });
+      observer.observe(element, {
+        attributes: true,
+        attributeFilter: ["style", "transform"],
+      });
     }
   }
 
@@ -2800,10 +2860,10 @@ class GMQueueApplication extends Application {
    * @private
    */
   async _onWindowPositionUpdate() {
-      if (this.position) {
-          console.log("Window position updated", this.position);
-          await game.settings.set(ANewFoe.ID, "gmQueuePosition", this.position);
-      }
+    if (this.position) {
+      //console.log("Window position updated", this.position);
+      await game.settings.set(ANewFoe.ID, "gmQueuePosition", this.position);
+    }
   }
 
   /**
@@ -2831,10 +2891,33 @@ class GMQueueApplication extends Application {
 
     this.setPosition({ width: this.position.width });
   }
+
+  /** @override */
+  _getHeaderButtons() {
+    const buttons = super._getHeaderButtons();
+    // Add dragstart and dragend event handlers to header
+    if (this.element && this.element.length) {
+      const header = this.element.find(".window-header");
+      header.on("dragstart", this._onDragStart.bind(this));
+      header.on("dragend", this._onDragEnd.bind(this));
+    }
+    return buttons;
+  }
+
+  _onDragStart(event) {
+    //console.log("GM Queue window drag started");
+  }
+
+  _onDragEnd(event) {
+    //console.log("GM Queue window drag ended", this.position);
+    if (this.position) {
+      game.settings.set(ANewFoe.ID, "gmQueuePosition", this.position);
+    }
+  }
 }
 
 Hooks.once("init", () => {
-  CONFIG.debug.hooks = true;
+  // CONFIG.debug.hooks = true;
 });
 
 Hooks.once("ready", () => {
