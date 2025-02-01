@@ -1,21 +1,48 @@
 <div class="gm-queue-container">
-  {{#if requests.length}}
-    {{#each requests}}
-    <div class="request-row">
-      <div class="request-info">
-        <span>{{this.userName}} requests {{this.statKey}} of {{this.monsterName}}</span>
-      </div>
-      <div class="request-actions">
-        <button class="approve-request" data-user-id="{{this.userId}}" data-actor-id="{{this.actorId}}" data-key="{{this.statKey}}">
-          <i class="fas fa-check-circle"></i>
-        </button>
-        <button class="reject-request" data-user-id="{{this.userId}}" data-actor-id="{{this.actorId}}" data-key="{{this.statKey}}">
-          <i class="fas fa-times-circle"></i>
-        </button>
-      </div>
+  {{#if requests.length}} {{#each requests}}
+  <div class="request-row">
+    <div class="request-info">
+      <span
+        >{{this.userName}} requests {{this.statKey}} of
+        {{this.monsterName}}</span
+      >
     </div>
-    {{/each}}
-  {{else}}
-    <p class="no-requests">No pending requests</p>
+
+    <div class="request-actions">
+      <button
+        class="approve-request"
+        data-user-id="{{this.userId}}"
+        data-actor-id="{{this.actorId}}"
+        data-key="{{this.statKey}}"
+      >
+        <i class="fas fa-check-circle"></i>
+      </button>
+      <button
+        class="reject-request"
+        data-user-id="{{this.userId}}"
+        data-actor-id="{{this.actorId}}"
+        data-key="{{this.statKey}}"
+      >
+        <i class="fas fa-times-circle"></i>
+      </button>
+    </div>
+    <select
+      class="ability-select"
+      data-user-id="{{this.userId}}"
+      data-actor-id="{{this.actorId}}"
+      data-key="{{this.statKey}}"
+    >
+      <option value="">None</option>
+      <option value="str">STR</option>
+      <option value="dex">DEX</option>
+      <option value="con">CON</option>
+      <option value="int">INT</option>
+      <option value="wis">WIS</option>
+      <option value="cha">CHA</option>
+    </select>
+  </div>
+
+  {{/each}} {{else}}
+  <p class="no-requests">No pending requests</p>
   {{/if}}
 </div>
