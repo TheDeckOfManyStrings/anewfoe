@@ -16,10 +16,6 @@
   ],
   "scripts": ["scripts/anewfoe.js"],
   "styles": ["styles/anewfoe.css"],
-  "templates": [
-    "templates/status-settings.html",
-    "templates/health-settings.html"
-  ],
   "languages": [
     {
       "lang": "en",
